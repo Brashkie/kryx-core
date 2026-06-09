@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="media/logo.png" alt="Kryx core" width="200" />
+<img src="media/logo.png" alt="Kryx core" width="280" />
 
 **Capa fundacional del ecosistema multimedia [Kryx](https://kryx.dev)**
 

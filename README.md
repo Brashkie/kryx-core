@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="media/logo.png" alt="Kryx core" width="200" />
+<img src="media/logo.png" alt="Kryx core" width="280" />
 
 **The foundational layer of the [Kryx](https://kryx.dev) multimedia ecosystem**
 
