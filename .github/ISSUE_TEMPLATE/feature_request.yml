@@ -1,0 +1,51 @@
+name: ✨ Feature Request
+description: Suggest a new feature for @kryxjs/core
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for your idea! Please describe the feature so we can discuss.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem does this solve? Who is affected?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How would this work? Include API sketch if relevant.
+      render: ts
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you thought about and why this one is better.
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Does this belong in @kryxjs/core, or in a higher-level package?
+      options:
+        - kryx-core (foundational primitive)
+        - media-codecs / media-containers (codec or parser)
+        - media-stream (network / realtime)
+        - media-ai (AI features)
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context

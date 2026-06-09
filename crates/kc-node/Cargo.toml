@@ -1,0 +1,24 @@
+[package]
+name = "kc-node"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Node.js native addon for @kryxjs/core via napi-rs"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+kc-core = { workspace = true }
+napi = { workspace = true }
+napi-derive = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[build-dependencies]
+napi-build = "2.1"

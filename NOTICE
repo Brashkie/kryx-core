@@ -1,0 +1,39 @@
+@kryxjs/core
+Copyright 2025 Brashkie
+
+This product includes software developed by the Brashkie organization
+(https://github.com/Brashkie) as part of the Kryx multimedia ecosystem.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+---
+
+This product depends on third-party open-source software:
+
+Rust crates:
+  - tokio (MIT)
+  - bytes (MIT)
+  - thiserror (MIT / Apache-2.0)
+  - anyhow (MIT / Apache-2.0)
+  - parking_lot (MIT / Apache-2.0)
+  - bitflags (MIT / Apache-2.0)
+  - async-trait (MIT / Apache-2.0)
+  - tracing (MIT)
+  - serde (MIT / Apache-2.0)
+  - napi (MIT)
+  - napi-derive (MIT)
+
+Node.js packages (devDependencies only — not shipped):
+  - @napi-rs/cli (MIT)
+  - vitest (MIT)
+  - tsup (MIT)
+  - typescript (Apache-2.0)
+  - prettier (MIT)
+  - eslint (MIT)
+
+Full license texts of these dependencies are available in their
+respective package distributions.

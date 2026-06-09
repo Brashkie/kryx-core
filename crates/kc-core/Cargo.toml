@@ -1,0 +1,57 @@
+[package]
+name = "kc-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core logic for @kryxjs/core — buffers, pipelines, sync, I/O"
+
+[dependencies]
+# Async
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Errors
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Memory / buffers
+bytes = { workspace = true }
+bytemuck = { workspace = true }
+bitflags = { workspace = true }
+parking_lot = { workspace = true }
+arc-swap = { workspace = true }
+crossbeam-channel = { workspace = true }
+smallvec = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Serde (optional)
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+[features]
+default = []
+serde = ["dep:serde", "dep:serde_json"]
+# Link against real Zig modules. Without this feature, internal stubs are used,
+# so the crate is always usable for development and testing.
+link-zig = []
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+unused_must_use = "warn"
+# Silence harmless dead_code from API surface that's exposed for downstream crates
+# but not yet used internally (sync helpers, FFI helpers, builder fields).
+dead_code = "allow"
+
+[lints.clippy]
+all = "warn"
+pedantic = "allow"
+module_name_repetitions = "allow"
+
+[dev-dependencies]
+tokio = { workspace = true }
+tracing-subscriber = { workspace = true }

@@ -1,0 +1,33 @@
+# Auto-detect text files and normalize line endings
+* text=auto eol=lf
+
+# Force LF on shell scripts
+*.sh text eol=lf
+
+# Force CRLF on Windows batch
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.node binary
+*.so binary
+*.dylib binary
+*.dll binary
+*.exe binary
+
+# Generated files — don't show in diffs
+package-lock.json -diff
+Cargo.lock -diff
+dist/* -diff
+*.snap -diff
+
+# Mark generated artifacts as such (for GitHub language stats)
+dist/*       linguist-generated=true
+target/*     linguist-generated=true
+*.node       linguist-generated=true
+index.js     linguist-generated=true
+index.d.ts   linguist-generated=true

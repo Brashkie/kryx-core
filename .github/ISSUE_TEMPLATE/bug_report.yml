@@ -1,0 +1,82 @@
+name: 🐛 Bug Report
+description: Report a problem with @kryxjs/core
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report!
+        Please fill out the form below so we can reproduce and fix it quickly.
+
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      description: Output of `npm list @kryxjs/core`
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Windows (x64)
+        - Windows (arm64)
+        - macOS (x64)
+        - macOS (arm64 / Apple Silicon)
+        - Linux (x64 glibc)
+        - Linux (x64 musl)
+        - Linux (arm64)
+        - Other (describe below)
+    validations:
+      required: true
+
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      placeholder: "v20.10.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Minimal code or steps that reproduce the issue.
+      render: ts
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead. Include error messages, stack traces.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Anything else relevant (logs, screenshots, related issues).

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/Brashkie/kryx-core/discussions
+    about: Ask questions and discuss ideas
+  - name: 🔒 Security
+    url: https://github.com/Brashkie/kryx-core/security/policy
+    about: Report a security vulnerability privately

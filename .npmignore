@@ -1,0 +1,71 @@
+# ═════════════════════════════════════════════════════════════════════════════
+# @kryxjs/core — .npmignore
+#
+# What ships in the published tarball: dist/, index.js, index.d.ts, README*,
+# LICENSE, NOTICE, CHANGELOG.md, and the media/logo.png referenced by README.
+#
+# Everything below is excluded. Stay minimal — smaller tarballs install faster.
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─── Source code (we ship compiled dist/, not src/) ─────────────────────────
+src/
+crates/
+__tests__/
+examples/
+scripts/
+docs/
+benches/
+
+# ─── Build artifacts that shouldn't ship ────────────────────────────────────
+target/
+coverage/
+node_modules/
+*.tsbuildinfo
+.tsbuildinfo
+
+# ─── Per-platform npm folder (published as separate packages) ───────────────
+npm/
+
+# ─── Tooling configs (irrelevant to consumers) ──────────────────────────────
+.github/
+.vscode/
+.idea/
+.editorconfig
+.eslintrc*
+.prettierrc*
+.gitignore
+.gitattributes
+tsup.config.ts
+vitest.config.ts
+tsconfig.json
+tsconfig.test.json
+Cargo.toml
+Cargo.lock
+rust-toolchain.toml
+build.rs
+
+# ─── Editor / OS junk ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ─── Test / coverage output ─────────────────────────────────────────────────
+*.log
+lcov.info
+coverage.xml
+junit.xml
+.nyc_output
+
+# ─── Internal docs that don't help consumers ────────────────────────────────
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+SECURITY.md
+docs/
+
+# ─── Source maps — keep them (helps consumers debug) ─────────────────────────
+# (Don't uncomment unless you want a slightly smaller tarball at the cost
+#  of consumer DX)
+# dist/*.map
+.npmrc

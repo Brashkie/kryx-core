@@ -1,0 +1,203 @@
+name: CI
+
+env:
+  DEBUG: napi:*
+  APP_NAME: kryx-core
+  MACOSX_DEPLOYMENT_TARGET: '10.13'
+  CARGO_INCREMENTAL: '1'
+
+permissions:
+  contents: write
+  id-token: write
+
+on:
+  push:
+    branches:
+      - main
+    tags-ignore:
+      - '**'
+    paths-ignore:
+      - '**/*.md'
+      - LICENSE
+      - NOTICE
+      - '**/*.gitignore'
+      - .editorconfig
+      - docs/**
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Rust unit tests (fail fast)
+  # ═══════════════════════════════════════════════════════════════════════════
+  rust-test:
+    name: Rust tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run tests (excluding NAPI bindings)
+        run: cargo test --workspace --exclude kc-node --verbose
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # TypeScript / Node tests
+  # ═══════════════════════════════════════════════════════════════════════════
+  ts-test:
+    name: TypeScript tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build native addon (debug — needed by Vitest)
+        run: npm run build:native:debug
+
+      - name: Vitest
+        run: npm run test:vitest
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Build native binaries for all 7 platforms
+  # ═══════════════════════════════════════════════════════════════════════════
+  build:
+    needs: rust-test
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          # macOS
+          - host: macos-latest
+            target: x86_64-apple-darwin
+            build: npm run build:native
+
+          - host: macos-latest
+            target: aarch64-apple-darwin
+            build: npm run build:native -- --target aarch64-apple-darwin
+
+          # Windows
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
+            build: npm run build:native
+
+          - host: windows-latest
+            target: aarch64-pc-windows-msvc
+            build: npm run build:native -- --target aarch64-pc-windows-msvc
+
+          # Linux x64 GNU (Debian)
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian
+            build: |
+              rustup update stable
+              npm run build:native -- --target x86_64-unknown-linux-gnu
+
+          # Linux x64 musl (Alpine)
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
+            build: |
+              rustup update stable
+              npm run build:native -- --target x86_64-unknown-linux-musl
+
+          # Linux ARM64 GNU - Install cross-compiler first
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian-aarch64
+            build: |
+              apt-get update && apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+              rustup update stable
+              rustup target add aarch64-unknown-linux-gnu
+              export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+              export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+              export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+              npm run build:native -- --target aarch64-unknown-linux-gnu
+
+    name: stable - ${{ matrix.settings.target }} - node@20
+    runs-on: ${{ matrix.settings.host }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        if: ${{ !matrix.settings.docker }}
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        if: ${{ !matrix.settings.docker }}
+        with:
+          toolchain: stable
+          targets: ${{ matrix.settings.target }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            .cargo-cache
+            target/
+          key: ${{ matrix.settings.target }}-cargo-${{ matrix.settings.host }}
+
+      - name: Install dependencies
+        if: ${{ !matrix.settings.docker }}
+        run: npm install
+
+      - name: Build in docker
+        uses: addnab/docker-run-action@v3
+        if: ${{ matrix.settings.docker }}
+        with:
+          image: ${{ matrix.settings.docker }}
+          options: '--user 0:0 -v ${{ github.workspace }}/.cargo-cache/git/db:/usr/local/cargo/git/db -v ${{ github.workspace }}/.cargo/registry/cache:/usr/local/cargo/registry/cache -v ${{ github.workspace }}/.cargo/registry/index:/usr/local/cargo/registry/index -v ${{ github.workspace }}:/build -w /build'
+          run: |
+            npm install
+            ${{ matrix.settings.build }}
+
+      - name: Build
+        run: ${{ matrix.settings.build }}
+        if: ${{ !matrix.settings.docker }}
+        shell: bash
+
+      - name: List built files
+        run: ls -la *.node || echo "No .node files found"
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bindings-${{ matrix.settings.target }}
+          path: ${{ env.APP_NAME }}.*.node
+          if-no-files-found: error
