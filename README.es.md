@@ -386,6 +386,42 @@ Números aproximados de benchmarks locales (Ryzen 7 5800X, Node 20):
 
 Las cargas reales están dominadas por códec/IO, no por estas primitivas. Mide las tuyas.
 
+### `BufferPool` (0.2.0)
+
+En un pipeline que procesa miles de frames por segundo, alocar y liberar un
+buffer por cada frame mantiene al allocator ocupado. `BufferPool` recicla esas
+allocaciones — reusar un buffer que ya está "caliente" se saltea por completo el
+ciclo malloc + fault de página + free.
+
+```rust
+use kc_core::buffer::BufferPool;
+
+let mut pool = BufferPool::new();
+
+let mut buf = pool.acquire(64 * 1024); // limpio, capacidad ≥ 64 KiB
+buf.extend_from_slice(frame_bytes);
+// ... usar el buffer ...
+pool.recycle(buf); // vuelve al pool para el próximo frame
+
+println!("hit rate: {:.1}%", pool.stats().hit_rate() * 100.0);
+```
+
+Es **size-bucketed** (buckets potencia de 2, 4 KiB → 4 MiB), con **cap por
+bucket** para que un pico de frames grandes no retenga memoria indefinidamente,
+y hace fallback a asignación directa por encima del bucket más grande. Medido con
+Criterion (`cargo bench`), pool vs. una allocación fresca por frame:
+
+| Carga | Baseline | Pool | Speedup |
+|---|---|---|---|
+| frame 4 KiB | 48.6 ns | 12.3 ns | ~4× |
+| frame 64 KiB | 159.6 ns | 12.0 ns | ~13× |
+| frame 1 MiB | 10.3 µs | 12.4 ns | ~830× |
+| churn (256 × 64 KiB) | 68.5 µs | 2.62 µs | ~26× |
+| carga mixta | 1.19 µs | 82.8 ns | ~14× |
+
+Los números son el mejor caso (100% de reuso); la ganancia real depende del hit
+rate, que `PoolStats` reporta.
+
 ---
 
 ## Desarrollo
@@ -502,11 +538,13 @@ Ver [docs/ROADMAP.md](docs/ROADMAP.md) para el plan completo.
 
 | Versión | Foco | Target |
 |---------|------|--------|
-| **0.1.x** | Fundaciones (actual) | ✅ Publicado |
-| **0.2** | Abstracciones de buffer GPU + primitivas de aceleración HW | Q2 2026 |
-| **0.3** | Tiempo real / streaming (RTP, tipos WebRTC, jitter buffer) | Q3 2026 |
-| **0.4** | Sistema de plugins para stages de terceros | Q4 2026 |
-| **1.0** | API estable + todos los paquetes Kryx encima | Q2 2027 |
+| **0.1.x** | Fundaciones | ✅ Publicado |
+| **0.2** | Rendimiento — `BufferPool` + benchmarks | ✅ Publicado |
+| **0.2.1** | Integración de `BufferPool` en `MediaBufferMut` | Próximo |
+| **0.3** | Observabilidad — métricas de pipeline + tracing spans | Q3 2026 |
+| **0.4** | Abstracciones de buffer GPU + primitivas de aceleración HW | Q4 2026 |
+| **0.5** | Tiempo real / streaming (RTP, tipos WebRTC, jitter buffer) | 2027 |
+| **1.0** | API estable + todos los paquetes Kryx encima | 2027 |
 
 ---
 

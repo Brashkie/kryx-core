@@ -6,7 +6,10 @@ use std::sync::Arc;
 use bytes::{Bytes, BytesMut};
 
 use crate::error::{BufferError, Result};
-use crate::types::{CodecId, MediaType, PixelFormat, SampleFormat, Timestamp, Timebase};
+use crate::types::{CodecId, MediaType, PixelFormat, SampleFormat, Timebase, Timestamp};
+
+mod pool;
+pub use pool::{BufferPool, PoolStats};
 
 pub const MAX_BUFFER_SIZE: usize = 256 * 1024 * 1024; // 256 MiB
 
@@ -92,33 +95,89 @@ impl MediaBuffer {
     }
 
     // ── Accessors ──────────────────────────────────────────────────────────
-    #[inline] pub fn data(&self)         -> &[u8]       { &self.data }
-    #[inline] pub fn len(&self)          -> usize        { self.data.len() }
-    #[inline] pub fn is_empty(&self)     -> bool         { self.data.is_empty() }
-    #[inline] pub fn pts(&self)          -> Timestamp    { self.pts }
-    #[inline] pub fn dts(&self)          -> Timestamp    { self.dts }
-    #[inline] pub fn duration(&self)     -> Timestamp    { self.duration }
-    #[inline] pub fn timebase(&self)     -> Timebase     { self.timebase }
-    #[inline] pub fn media_type(&self)   -> MediaType    { self.media_type }
-    #[inline] pub fn codec_id(&self)     -> CodecId      { self.codec_id }
-    #[inline] pub fn flags(&self)        -> FrameFlags   { self.flags }
-    #[inline] pub fn stream_index(&self) -> u32          { self.stream_index }
-    #[inline] pub fn meta(&self)         -> &FrameMeta   { &self.meta }
+    #[inline]
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+    #[inline]
+    pub fn pts(&self) -> Timestamp {
+        self.pts
+    }
+    #[inline]
+    pub fn dts(&self) -> Timestamp {
+        self.dts
+    }
+    #[inline]
+    pub fn duration(&self) -> Timestamp {
+        self.duration
+    }
+    #[inline]
+    pub fn timebase(&self) -> Timebase {
+        self.timebase
+    }
+    #[inline]
+    pub fn media_type(&self) -> MediaType {
+        self.media_type
+    }
+    #[inline]
+    pub fn codec_id(&self) -> CodecId {
+        self.codec_id
+    }
+    #[inline]
+    pub fn flags(&self) -> FrameFlags {
+        self.flags
+    }
+    #[inline]
+    pub fn stream_index(&self) -> u32 {
+        self.stream_index
+    }
+    #[inline]
+    pub fn meta(&self) -> &FrameMeta {
+        &self.meta
+    }
 
-    #[inline] pub fn is_keyframe(&self) -> bool { self.flags.contains(FrameFlags::KEYFRAME) }
-    #[inline] pub fn is_eos(&self)      -> bool { self.flags.contains(FrameFlags::END_OF_STREAM) }
-    #[inline] pub fn is_decoded(&self)  -> bool { self.flags.contains(FrameFlags::DECODED) }
+    #[inline]
+    pub fn is_keyframe(&self) -> bool {
+        self.flags.contains(FrameFlags::KEYFRAME)
+    }
+    #[inline]
+    pub fn is_eos(&self) -> bool {
+        self.flags.contains(FrameFlags::END_OF_STREAM)
+    }
+    #[inline]
+    pub fn is_decoded(&self) -> bool {
+        self.flags.contains(FrameFlags::DECODED)
+    }
 
     #[must_use]
-    pub fn with_pts(mut self, pts: Timestamp) -> Self { self.pts = pts; self }
+    pub fn with_pts(mut self, pts: Timestamp) -> Self {
+        self.pts = pts;
+        self
+    }
 
     #[must_use]
-    pub fn with_flags(mut self, flags: FrameFlags) -> Self { self.flags = flags; self }
+    pub fn with_flags(mut self, flags: FrameFlags) -> Self {
+        self.flags = flags;
+        self
+    }
 
     /// Zero-copy slice.
     pub fn slice(&self, start: usize, end: usize) -> Result<Self> {
         if end > self.data.len() || start > end {
-            return Err(BufferError::OutOfBounds { start, end, len: self.data.len() }.into());
+            return Err(BufferError::OutOfBounds {
+                start,
+                end,
+                len: self.data.len(),
+            }
+            .into());
         }
         let mut cloned = self.clone();
         cloned.data = self.data.slice(start..end);
@@ -130,15 +189,15 @@ impl MediaBuffer {
 
 pub struct MediaBufferBuilder {
     media_type: MediaType,
-    data:         Option<Vec<u8>>,
-    pts:          Timestamp,
-    dts:          Timestamp,
-    duration:     Timestamp,
-    timebase:     Timebase,
-    codec_id:     CodecId,
-    flags:        FrameFlags,
+    data: Option<Vec<u8>>,
+    pts: Timestamp,
+    dts: Timestamp,
+    duration: Timestamp,
+    timebase: Timebase,
+    codec_id: CodecId,
+    flags: FrameFlags,
     stream_index: u32,
-    meta:         FrameMeta,
+    meta: FrameMeta,
 }
 
 impl MediaBufferBuilder {
@@ -157,21 +216,65 @@ impl MediaBufferBuilder {
         }
     }
 
-    #[must_use] pub fn data(mut self, data: impl Into<Vec<u8>>) -> Self { self.data = Some(data.into()); self }
-    #[must_use] pub fn pts(mut self, pts: Timestamp) -> Self { self.pts = pts; self }
-    #[must_use] pub fn dts(mut self, dts: Timestamp) -> Self { self.dts = dts; self }
-    #[must_use] pub fn duration(mut self, d: Timestamp) -> Self { self.duration = d; self }
-    #[must_use] pub fn timebase(mut self, tb: Timebase) -> Self { self.timebase = tb; self }
-    #[must_use] pub fn codec(mut self, c: CodecId) -> Self { self.codec_id = c; self }
-    #[must_use] pub fn flags(mut self, f: FrameFlags) -> Self { self.flags = f; self }
-    #[must_use] pub fn stream_index(mut self, i: u32) -> Self { self.stream_index = i; self }
-    #[must_use] pub fn video_meta(mut self, m: VideoMeta) -> Self { self.meta = FrameMeta::Video(m); self }
-    #[must_use] pub fn audio_meta(mut self, m: AudioMeta) -> Self { self.meta = FrameMeta::Audio(m); self }
+    #[must_use]
+    pub fn data(mut self, data: impl Into<Vec<u8>>) -> Self {
+        self.data = Some(data.into());
+        self
+    }
+    #[must_use]
+    pub fn pts(mut self, pts: Timestamp) -> Self {
+        self.pts = pts;
+        self
+    }
+    #[must_use]
+    pub fn dts(mut self, dts: Timestamp) -> Self {
+        self.dts = dts;
+        self
+    }
+    #[must_use]
+    pub fn duration(mut self, d: Timestamp) -> Self {
+        self.duration = d;
+        self
+    }
+    #[must_use]
+    pub fn timebase(mut self, tb: Timebase) -> Self {
+        self.timebase = tb;
+        self
+    }
+    #[must_use]
+    pub fn codec(mut self, c: CodecId) -> Self {
+        self.codec_id = c;
+        self
+    }
+    #[must_use]
+    pub fn flags(mut self, f: FrameFlags) -> Self {
+        self.flags = f;
+        self
+    }
+    #[must_use]
+    pub fn stream_index(mut self, i: u32) -> Self {
+        self.stream_index = i;
+        self
+    }
+    #[must_use]
+    pub fn video_meta(mut self, m: VideoMeta) -> Self {
+        self.meta = FrameMeta::Video(m);
+        self
+    }
+    #[must_use]
+    pub fn audio_meta(mut self, m: AudioMeta) -> Self {
+        self.meta = FrameMeta::Audio(m);
+        self
+    }
 
     pub fn build(self) -> Result<MediaBuffer> {
         let data = self.data.unwrap_or_default();
         if data.len() > MAX_BUFFER_SIZE {
-            return Err(BufferError::CapacityExceeded { requested: data.len(), maximum: MAX_BUFFER_SIZE }.into());
+            return Err(BufferError::CapacityExceeded {
+                requested: data.len(),
+                maximum: MAX_BUFFER_SIZE,
+            }
+            .into());
         }
         Ok(MediaBuffer {
             data: Bytes::from(data),
@@ -198,14 +301,25 @@ pub struct MediaBufferMut {
 
 impl MediaBufferMut {
     pub fn with_capacity(media_type: MediaType, capacity: usize) -> Self {
-        Self { inner: BytesMut::with_capacity(capacity), media_type }
+        Self {
+            inner: BytesMut::with_capacity(capacity),
+            media_type,
+        }
     }
-    pub fn extend(&mut self, data: &[u8]) { self.inner.extend_from_slice(data); }
-    pub fn len(&self) -> usize { self.inner.len() }
-    pub fn is_empty(&self) -> bool { self.inner.is_empty() }
+    pub fn extend(&mut self, data: &[u8]) {
+        self.inner.extend_from_slice(data);
+    }
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
 
     pub fn freeze(self) -> Result<MediaBuffer> {
-        MediaBuffer::builder(self.media_type).data(self.inner.to_vec()).build()
+        MediaBuffer::builder(self.media_type)
+            .data(self.inner.to_vec())
+            .build()
     }
 }
 
@@ -220,7 +334,8 @@ mod tests {
             .pts(Timestamp::new(90_000))
             .flags(FrameFlags::KEYFRAME)
             .data(vec![0xAB; 512])
-            .build().unwrap();
+            .build()
+            .unwrap();
 
         assert!(buf.is_keyframe());
         assert_eq!(buf.pts(), Timestamp::new(90_000));
@@ -229,7 +344,10 @@ mod tests {
 
     #[test]
     fn clone_is_zero_copy() {
-        let buf = MediaBuffer::builder(MediaType::Video).data(vec![0u8; 4096]).build().unwrap();
+        let buf = MediaBuffer::builder(MediaType::Video)
+            .data(vec![0u8; 4096])
+            .build()
+            .unwrap();
         let clone = buf.clone();
         assert_eq!(buf.data().as_ptr(), clone.data().as_ptr());
     }

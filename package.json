@@ -1,6 +1,6 @@
 {
   "name": "@kryxjs/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Core engine for the Kryx multimedia ecosystem — buffers, pipelines, and runtime (ESM + CJS + TypeScript)",
   "type": "commonjs",
   "main": "./dist/index.cjs",

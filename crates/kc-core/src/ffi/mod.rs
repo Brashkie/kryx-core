@@ -72,11 +72,17 @@ impl ZigBufferView {
     ///
     /// The slice must outlive every Zig call that uses this view.
     pub unsafe fn from_slice(data: &[u8]) -> Self {
-        Self { ptr: data.as_ptr(), len: data.len() }
+        Self {
+            ptr: data.as_ptr(),
+            len: data.len(),
+        }
     }
 
     pub const fn null() -> Self {
-        Self { ptr: std::ptr::null(), len: 0 }
+        Self {
+            ptr: std::ptr::null(),
+            len: 0,
+        }
     }
 
     pub const fn is_null(&self) -> bool {

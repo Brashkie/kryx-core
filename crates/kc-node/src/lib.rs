@@ -4,12 +4,12 @@
 #![deny(clippy::all)]
 #![allow(clippy::new_without_default)]
 
-use napi::bindgen_prelude::Buffer;
-use napi_derive::napi;
 use kc_core::{
     buffer::MediaBuffer as RustMediaBuffer,
-    types::{CodecId, MediaType, Timestamp, Timebase},
+    types::{CodecId, MediaType, Timebase, Timestamp},
 };
+use napi::bindgen_prelude::Buffer;
+use napi_derive::napi;
 
 // ─── Timestamp ───────────────────────────────────────────────────────────────
 
@@ -23,20 +23,34 @@ pub struct JsTimestamp {
 impl JsTimestamp {
     #[napi(constructor)]
     pub fn new(pts: i64) -> Self {
-        Self { inner: Timestamp::new(pts) }
+        Self {
+            inner: Timestamp::new(pts),
+        }
     }
 
     #[napi(factory)]
-    pub fn none() -> Self { Self { inner: Timestamp::NONE } }
+    pub fn none() -> Self {
+        Self {
+            inner: Timestamp::NONE,
+        }
+    }
 
     #[napi(factory)]
-    pub fn zero() -> Self { Self { inner: Timestamp::ZERO } }
+    pub fn zero() -> Self {
+        Self {
+            inner: Timestamp::ZERO,
+        }
+    }
 
     #[napi(getter)]
-    pub fn pts(&self) -> i64 { self.inner.pts() }
+    pub fn pts(&self) -> i64 {
+        self.inner.pts()
+    }
 
     #[napi(getter)]
-    pub fn is_valid(&self) -> bool { self.inner.is_valid() }
+    pub fn is_valid(&self) -> bool {
+        self.inner.is_valid()
+    }
 }
 
 // ─── MediaBuffer ─────────────────────────────────────────────────────────────
@@ -80,33 +94,51 @@ impl JsMediaBuffer {
     /// Create an end-of-stream sentinel.
     #[napi(factory)]
     pub fn eos_video() -> Self {
-        Self { inner: RustMediaBuffer::end_of_stream(MediaType::Video) }
+        Self {
+            inner: RustMediaBuffer::end_of_stream(MediaType::Video),
+        }
     }
 
     #[napi(getter)]
-    pub fn pts(&self) -> i64 { self.inner.pts().pts() }
+    pub fn pts(&self) -> i64 {
+        self.inner.pts().pts()
+    }
 
     #[napi(getter)]
-    pub fn len(&self) -> u32 { self.inner.len() as u32 }
+    pub fn len(&self) -> u32 {
+        self.inner.len() as u32
+    }
 
     #[napi(getter)]
-    pub fn is_empty(&self) -> bool { self.inner.is_empty() }
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
 
     #[napi(getter)]
-    pub fn is_keyframe(&self) -> bool { self.inner.is_keyframe() }
+    pub fn is_keyframe(&self) -> bool {
+        self.inner.is_keyframe()
+    }
 
     #[napi(getter)]
-    pub fn is_eos(&self) -> bool { self.inner.is_eos() }
+    pub fn is_eos(&self) -> bool {
+        self.inner.is_eos()
+    }
 
     #[napi(getter)]
-    pub fn media_type(&self) -> String { self.inner.media_type().to_string() }
+    pub fn media_type(&self) -> String {
+        self.inner.media_type().to_string()
+    }
 
     #[napi(getter)]
-    pub fn codec_id(&self) -> String { self.inner.codec_id().to_string() }
+    pub fn codec_id(&self) -> String {
+        self.inner.codec_id().to_string()
+    }
 
     /// Raw data as a Buffer.
     #[napi]
-    pub fn data(&self) -> Buffer { self.inner.data().to_vec().into() }
+    pub fn data(&self) -> Buffer {
+        self.inner.data().to_vec().into()
+    }
 }
 
 // ─── Version ─────────────────────────────────────────────────────────────────

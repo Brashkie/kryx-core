@@ -18,7 +18,10 @@ pub enum MediaError {
     Io(#[from] std::io::Error),
 
     #[error("ffi error: {context} — {message}")]
-    Ffi { context: &'static str, message: String },
+    Ffi {
+        context: &'static str,
+        message: String,
+    },
 
     #[error("sync error: {0}")]
     Sync(#[from] SyncError),
@@ -49,7 +52,11 @@ pub enum BufferError {
     Empty,
 
     #[error("slice [{start}..{end}] out of bounds for len {len}")]
-    OutOfBounds { start: usize, end: usize, len: usize },
+    OutOfBounds {
+        start: usize,
+        end: usize,
+        len: usize,
+    },
 }
 
 #[derive(Debug, Error)]
@@ -62,7 +69,11 @@ pub enum PipelineError {
     ChannelClosed { stage: String },
 
     #[error("type mismatch at stage {stage}: expected {expected}, got {actual}")]
-    TypeMismatch { stage: String, expected: String, actual: String },
+    TypeMismatch {
+        stage: String,
+        expected: String,
+        actual: String,
+    },
 }
 
 #[derive(Debug, Error)]
@@ -76,14 +87,26 @@ pub enum SyncError {
 }
 
 impl MediaError {
-    pub fn internal(msg: impl fmt::Display) -> Self { Self::Internal(msg.to_string()) }
-    pub fn unsupported(msg: impl fmt::Display) -> Self { Self::Unsupported(msg.to_string()) }
+    pub fn internal(msg: impl fmt::Display) -> Self {
+        Self::Internal(msg.to_string())
+    }
+    pub fn unsupported(msg: impl fmt::Display) -> Self {
+        Self::Unsupported(msg.to_string())
+    }
     pub fn ffi(context: &'static str, message: impl fmt::Display) -> Self {
-        Self::Ffi { context, message: message.to_string() }
+        Self::Ffi {
+            context,
+            message: message.to_string(),
+        }
     }
 
     pub fn is_recoverable(&self) -> bool {
-        matches!(self, Self::Sync(SyncError::DriftExceeded { .. }) | Self::Timeout { .. } | Self::Buffer(BufferError::Empty))
+        matches!(
+            self,
+            Self::Sync(SyncError::DriftExceeded { .. })
+                | Self::Timeout { .. }
+                | Self::Buffer(BufferError::Empty)
+        )
     }
 
     pub fn is_fatal(&self) -> bool {
