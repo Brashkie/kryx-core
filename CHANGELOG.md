@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.1] — 2026-08-11
+
+**`BufferPool` integration into `MediaBufferMut`.** The pool from 0.2.0 is now
+wired into the growable write buffer, so decoders and stages can recycle their
+scratch allocations. No existing API changes — the poolless path is untouched.
+
+### Added
+- `MediaBufferMut::with_pool(pool, media_type, capacity)` — draw the scratch
+  allocation from a `BufferPool` instead of allocating fresh.
+- `MediaBufferMut::freeze_zero_copy()` — freeze with **no copy**, converting the
+  scratch directly into shared `Bytes` (the resulting `MediaBuffer` owns the
+  allocation; nothing returns to the pool).
+- `SharedPool` (`Rc<RefCell<BufferPool>>`) type alias + `shared_pool()` helper
+  for single-threaded, per-stage pool sharing.
+
+### Changed
+- `MediaBufferMut::freeze()` now recycles its scratch back to the pool (when the
+  buffer was created via `with_pool`), after copying the bytes out. Behavior for
+  buffers created with `with_capacity` (no pool) is unchanged.
+
+### Notes
+- Two freeze routes let the caller pick by data lifetime: `freeze()` for
+  reusable pipelines (copy + recycle, bounded memory), `freeze_zero_copy()` for
+  long-lived data (share allocation, skip the copy).
+
+## [0.2.0] — 2026-08-08
+
+**Performance.** First measured optimization: a buffer pool that recycles
+allocations instead of hitting the allocator on every frame.
+
+### Added
+- `BufferPool` — size-bucketed allocation recycling (power-of-two buckets from
+  4 KiB to 4 MiB), explicit `acquire(size)` / `recycle(buf)`, per-bucket caps
+  (default 32) so a spike of large frames can't pin memory indefinitely, and
+  direct allocation (dropped on recycle) for anything above the largest bucket.
+- `PoolStats` — hits, misses, recycled, dropped, and `hit_rate()`, so pool
+  effectiveness can be measured in production rather than assumed.
+- Criterion benchmark suite (`benches/buffer_pool.rs`) comparing the pool
+  against direct allocation across frame sizes, tight churn, and mixed load.
+
+### Performance
+Measured with Criterion (`cargo bench`), pool vs. a fresh allocation per frame.
+The pool wins across every shape tested — reusing an already-warm allocation
+skips the malloc + page-fault + free cycle:
+
+| Workload | Baseline | Pool | Speedup |
+|----------|----------|------|---------|
+| 4 KiB frame | 48.6 ns | 12.3 ns | ~4× |
+| 64 KiB frame | 159.6 ns | 12.0 ns | ~13× |
+| 1 MiB frame | 10.3 µs | 12.4 ns | ~830× |
+| churn (256 × 64 KiB) | 68.5 µs | 2.62 µs | ~26× |
+| mixed load | 1.19 µs | 82.8 ns | ~14× |
+
+Figures are best-case (100% reuse); real-world gains depend on hit rate, which
+`PoolStats.hit_rate()` reports.
+
 ## [0.1.0] — 2026-06-08
 
 **First public release of `@kryxjs/core`.**

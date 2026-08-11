@@ -1,6 +1,8 @@
 //! Zero-copy media buffers with frame metadata.
 
+use std::cell::RefCell;
 use std::fmt;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use bytes::{Bytes, BytesMut};
@@ -12,6 +14,20 @@ mod pool;
 pub use pool::{BufferPool, PoolStats};
 
 pub const MAX_BUFFER_SIZE: usize = 256 * 1024 * 1024; // 256 MiB
+
+/// A shared, single-threaded handle to a [`BufferPool`].
+///
+/// The pool is not thread-safe by design (a lock-free primitive is fastest when
+/// each pipeline stage owns its pool). `SharedPool` wraps it in `Rc<RefCell<_>>`
+/// so a [`MediaBufferMut`] can hold onto the pool and return its scratch buffer
+/// on freeze, within a single thread. Across threads, give each worker its own
+/// pool.
+pub type SharedPool = Rc<RefCell<BufferPool>>;
+
+/// Create a new shared pool with default settings.
+pub fn shared_pool() -> SharedPool {
+    Rc::new(RefCell::new(BufferPool::new()))
+}
 
 // ─── FrameFlags ──────────────────────────────────────────────────────────────
 
@@ -294,18 +310,49 @@ impl MediaBufferBuilder {
 // ─── MediaBufferMut ──────────────────────────────────────────────────────────
 
 /// Growable buffer for writing data incrementally (e.g. inside a decoder).
+///
+/// It can optionally draw its scratch allocation from a [`BufferPool`] and
+/// return it there when frozen — see [`MediaBufferMut::with_pool`]. Two freeze
+/// routes trade off copy-vs-reuse; pick by how long the resulting data lives:
+///
+/// - [`freeze`](Self::freeze): copies the scratch into fresh [`Bytes`] and
+///   recycles the scratch back to the pool. Best for a pipeline processing many
+///   successive frames — the write buffer is reused, memory stays bounded.
+/// - [`freeze_zero_copy`](Self::freeze_zero_copy): converts the scratch into
+///   [`Bytes`] with no copy (the allocation is shared), so nothing returns to
+///   the pool. Best when the data will live a long time and the copy would cost
+///   more than the lost reuse.
 pub struct MediaBufferMut {
     inner: BytesMut,
     media_type: MediaType,
+    /// Optional pool the scratch came from; `freeze` returns the buffer here.
+    pool: Option<SharedPool>,
 }
 
 impl MediaBufferMut {
+    /// Create a standalone growable buffer (no pool involvement).
     pub fn with_capacity(media_type: MediaType, capacity: usize) -> Self {
         Self {
             inner: BytesMut::with_capacity(capacity),
             media_type,
+            pool: None,
         }
     }
+
+    /// Create a growable buffer whose scratch allocation is drawn from `pool`.
+    ///
+    /// On [`freeze`](Self::freeze) the scratch returns to this pool for reuse.
+    /// On [`freeze_zero_copy`](Self::freeze_zero_copy) it does not (ownership of
+    /// the allocation transfers to the resulting [`MediaBuffer`]).
+    pub fn with_pool(pool: &SharedPool, media_type: MediaType, capacity: usize) -> Self {
+        let inner = pool.borrow_mut().acquire(capacity);
+        Self {
+            inner,
+            media_type,
+            pool: Some(pool.clone()),
+        }
+    }
+
     pub fn extend(&mut self, data: &[u8]) {
         self.inner.extend_from_slice(data);
     }
@@ -316,10 +363,56 @@ impl MediaBufferMut {
         self.inner.is_empty()
     }
 
+    /// Freeze into a [`MediaBuffer`], **copying** the bytes into a fresh
+    /// allocation and **recycling** the scratch back to the pool (if any).
+    ///
+    /// Use this in a steady-state pipeline: the scratch buffer is reused for the
+    /// next frame, so allocation churn stays low and memory bounded.
     pub fn freeze(self) -> Result<MediaBuffer> {
-        MediaBuffer::builder(self.media_type)
-            .data(self.inner.to_vec())
-            .build()
+        let MediaBufferMut {
+            mut inner,
+            media_type,
+            pool,
+        } = self;
+        // Copy the written bytes out before the scratch goes back to the pool.
+        let out = MediaBuffer::builder(media_type)
+            .data(inner.to_vec())
+            .build();
+        if let Some(pool) = pool {
+            inner.clear();
+            pool.borrow_mut().recycle(inner);
+        }
+        out
+    }
+
+    /// Freeze into a [`MediaBuffer`] with **no copy**: the scratch allocation is
+    /// converted directly into shared [`Bytes`]. Nothing returns to the pool —
+    /// the resulting buffer owns the allocation for as long as it lives.
+    ///
+    /// Use this when the data will outlive the current frame and the copy would
+    /// cost more than the reuse you give up.
+    pub fn freeze_zero_copy(self) -> Result<MediaBuffer> {
+        let len = self.inner.len();
+        if len > MAX_BUFFER_SIZE {
+            return Err(BufferError::CapacityExceeded {
+                requested: len,
+                maximum: MAX_BUFFER_SIZE,
+            }
+            .into());
+        }
+        // BytesMut::freeze() shares the allocation — no memcpy.
+        Ok(MediaBuffer {
+            data: self.inner.freeze(),
+            pts: Timestamp::NONE,
+            dts: Timestamp::NONE,
+            duration: Timestamp::NONE,
+            timebase: Timebase::VIDEO_90K,
+            media_type: self.media_type,
+            codec_id: CodecId::Unknown,
+            flags: FrameFlags::empty(),
+            stream_index: 0,
+            meta: Arc::new(FrameMeta::None),
+        })
     }
 }
 
@@ -356,5 +449,44 @@ mod tests {
     fn eos_sentinel() {
         let eos = MediaBuffer::end_of_stream(MediaType::Video);
         assert!(eos.is_eos() && eos.is_empty());
+    }
+
+    #[test]
+    fn pooled_freeze_recycles_scratch() {
+        // with_pool draws scratch from the pool; freeze() copies out and returns
+        // the scratch, so a second with_pool of the same size reuses it.
+        let pool = shared_pool();
+        let mut buf = MediaBufferMut::with_pool(&pool, MediaType::Audio, 64 * 1024);
+        buf.extend(&[1, 2, 3, 4]);
+        let frame = buf.freeze().unwrap();
+        assert_eq!(frame.data(), &[1, 2, 3, 4]);
+        // The scratch went back: one buffer pooled, and its reuse shows as a hit.
+        assert_eq!(pool.borrow().pooled_count(), 1);
+
+        let buf2 = MediaBufferMut::with_pool(&pool, MediaType::Audio, 64 * 1024);
+        assert_eq!(pool.borrow().stats().hits, 1);
+        drop(buf2);
+    }
+
+    #[test]
+    fn zero_copy_freeze_does_not_recycle() {
+        // freeze_zero_copy shares the allocation with the MediaBuffer, so nothing
+        // returns to the pool — the frame owns it.
+        let pool = shared_pool();
+        let mut buf = MediaBufferMut::with_pool(&pool, MediaType::Audio, 64 * 1024);
+        buf.extend(&[9, 8, 7]);
+        let frame = buf.freeze_zero_copy().unwrap();
+        assert_eq!(frame.data(), &[9, 8, 7]);
+        // Scratch was NOT recycled — the frame holds the allocation.
+        assert_eq!(pool.borrow().pooled_count(), 0);
+    }
+
+    #[test]
+    fn with_capacity_still_works_without_a_pool() {
+        // The original poolless path is unchanged.
+        let mut buf = MediaBufferMut::with_capacity(MediaType::Video, 128);
+        buf.extend(&[0xAB; 10]);
+        let frame = buf.freeze().unwrap();
+        assert_eq!(frame.len(), 10);
     }
 }

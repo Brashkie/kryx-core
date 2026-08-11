@@ -26,26 +26,64 @@ The minimum viable core: buffers, pipelines, errors, timing, FFI bridge, full Ty
 
 ---
 
-## v0.2.0 — Performance & GPU primitives
+## v0.2.0 — Performance ✅ Shipped
 
-🎯 **Target: Q2 2025**
+Focus: make allocation cheap, and *prove* it with numbers.
 
-Focus: make the foundation faster and prepare for hardware acceleration.
+**Done:**
+- [x] `BufferPool` for reusing allocations under pressure — size-bucketed
+      (4 KiB → 4 MiB), per-bucket caps, direct-allocation fallback for oversized
+      frames, explicit `acquire` / `recycle`.
+- [x] `PoolStats` — hit/miss/recycle/drop counters + `hit_rate()`.
+- [x] Benchmark suite with Criterion. Result: the pool wins across every shape
+      measured (~4×–830×), because it skips the malloc + page-fault + free cycle
+      by reusing warm allocations.
+
+## v0.2.1 — BufferPool integration ✅ Shipped
+
+Focus: wire the pool into the write path without breaking any API.
+
+**Done:**
+- [x] `MediaBufferMut::with_pool(...)` — draw scratch from a `BufferPool`.
+- [x] `MediaBufferMut::freeze()` recycles its scratch back to the pool.
+- [x] `MediaBufferMut::freeze_zero_copy()` — freeze with no copy (share the
+      allocation), for long-lived data.
+- [x] `SharedPool` (`Rc<RefCell<BufferPool>>`) + `shared_pool()` for
+      single-threaded, per-stage sharing.
+
+---
+
+## v0.3.0 — Observability
+
+🎯 **Target: Q3 2026**
+
+Focus: see what the pipeline is doing, at low cost.
+
+**Planned:**
+- [ ] Pipeline metrics: per-stage throughput, allocation counts, drift
+- [ ] Optional `metrics` feature using the `metrics` crate
+- [ ] Tracing spans on every stage execution (via `tracing` feature)
+- [ ] Backpressure and queue-depth reporting between stages
+
+---
+
+## v0.4.0 — GPU primitives
+
+🎯 **Target: Q4 2026**
+
+Focus: prepare for hardware acceleration. The largest jump in complexity, kept
+in its own version on purpose.
 
 **Planned:**
 - [ ] `GpuBuffer` abstraction (Vulkan / Metal / D3D12 handles)
 - [ ] CPU↔GPU transfer helpers with zero-copy when possible
-- [ ] `BufferPool` for reusing allocations under pressure
-- [ ] Pipeline metrics: per-stage throughput, allocation counts, drift
-- [ ] Optional `metrics` feature using the `metrics` crate
-- [ ] Tracing spans on every stage execution (via `tracing` feature)
-- [ ] Benchmark suite with Criterion + flamegraphs in CI
+- [ ] Ownership, synchronization, and resource-lifetime model for GPU memory
 
 ---
 
-## v0.3.0 — Real-time & streaming primitives
+## v0.5.0 — Real-time & streaming primitives
 
-🎯 **Target: Q3 2025**
+🎯 **Target: 2027**
 
 Focus: low-latency and network-aware operation.
 
