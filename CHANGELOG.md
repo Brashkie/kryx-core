@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.2] — 2026-08-12
+
+**End-to-end pool validation.** Adds a decoder-shaped benchmark that measures the
+`BufferPool` the way a real decoder uses it — a sequence of frames, each built,
+written, and `freeze()`d — rather than in isolation.
+
+### Added
+- `benches/decoder_loop.rs` — Criterion benchmark comparing pooled vs. poolless
+  `MediaBufferMut` over a run of frames at several sizes, and a `hit_rate` report
+  showing the pool's steady-state reuse fraction via `PoolStats`.
+
+### Notes
+- Confirms the pool reaches ~99% hit rate for a steady frame size (one initial
+  miss, then reuse). The end-to-end win is smaller than the isolated micro-bench
+  because `freeze()` still copies scratch → owned `Bytes` — a real cost the pool
+  does not remove. This is the honest, decoder-shaped number.
+- **Architectural finding:** `SharedPool` is `Rc<RefCell<_>>` (single-threaded),
+  so it cannot be a field of a `Stage` (which is `Send + Sync`). The pool is used
+  synchronously here, modeling one decoder worker. Whether v0.3 needs a
+  thread-local pool, a `Send + Sync` pool, or leaves this as-is is a decision to
+  make with numbers, not preemptively — no architecture was changed to fit the
+  benchmark.
+
 ## [0.2.1] — 2026-08-11
 
 **`BufferPool` integration into `MediaBufferMut`.** The pool from 0.2.0 is now

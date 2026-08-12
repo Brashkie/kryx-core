@@ -541,6 +541,7 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for the full plan.
 | **0.1.x** | Foundations | ✅ Shipped |
 | **0.2** | Performance — `BufferPool` + benchmarks | ✅ Shipped |
 | **0.2.1** | `BufferPool` integration into `MediaBufferMut` | ✅ Shipped |
+| **0.2.2** | End-to-end pool validation (decoder-loop bench) | ✅ Shipped |
 | **0.3** | Observability — pipeline metrics + tracing spans | Q3 2026 |
 | **0.4** | GPU buffer abstractions + hw-accel primitives | Q4 2026 |
 | **0.5** | Real-time / streaming (RTP, WebRTC types, jitter buffer) | 2027 |

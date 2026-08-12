@@ -51,19 +51,38 @@ Focus: wire the pool into the write path without breaking any API.
 - [x] `SharedPool` (`Rc<RefCell<BufferPool>>`) + `shared_pool()` for
       single-threaded, per-stage sharing.
 
+## v0.2.2 — End-to-end pool validation ✅ Shipped
+
+Focus: measure the pool in a realistic decoder loop, not in isolation.
+
+**Done:**
+- [x] `benches/decoder_loop.rs` — pooled vs. poolless `MediaBufferMut` over a run
+      of frames, plus a steady-state hit-rate report from `PoolStats`.
+- [x] Confirmed ~99% hit rate for a steady frame size; the end-to-end win is
+      smaller than the micro-bench because `freeze()` still copies scratch → owned
+      `Bytes` (honest decoder-shaped number).
+
+**Architectural finding (input to v0.3):** `SharedPool` is `Rc<RefCell<_>>`
+(single-threaded) and cannot be a field of a `Stage` (`Send + Sync`). The pool
+was driven synchronously to model one decoder worker. The threading model — a
+thread-local pool, a `Send + Sync` pool, or leaving it as-is — is a decision to
+make with benchmarks in v0.3, not preemptively.
+
 ---
 
 ## v0.3.0 — Observability
 
 🎯 **Target: Q3 2026**
 
-Focus: see what the pipeline is doing, at low cost.
+Focus: see what the pipeline is doing, at low cost. Also the right place to
+resolve the pool's threading model (per the v0.2.2 finding) with measurements.
 
 **Planned:**
 - [ ] Pipeline metrics: per-stage throughput, allocation counts, drift
 - [ ] Optional `metrics` feature using the `metrics` crate
 - [ ] Tracing spans on every stage execution (via `tracing` feature)
 - [ ] Backpressure and queue-depth reporting between stages
+- [ ] Decide pool threading model with benchmarks (thread-local vs Send+Sync)
 
 ---
 

@@ -1,6 +1,6 @@
 {
   "name": "@kryxjs/core",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Core engine for the Kryx multimedia ecosystem — buffers, pipelines, and runtime (ESM + CJS + TypeScript)",
   "type": "commonjs",
   "main": "./dist/index.cjs",
@@ -98,13 +98,13 @@
     }
   },
   "optionalDependencies": {
-    "@kryxjs/core-win32-x64-msvc": "0.2.1",
-    "@kryxjs/core-win32-arm64-msvc": "0.2.1",
-    "@kryxjs/core-darwin-x64": "0.2.1",
-    "@kryxjs/core-darwin-arm64": "0.2.1",
-    "@kryxjs/core-linux-x64-gnu": "0.2.1",
-    "@kryxjs/core-linux-x64-musl": "0.2.1",
-    "@kryxjs/core-linux-arm64-gnu": "0.2.1"
+    "@kryxjs/core-win32-x64-msvc": "0.2.2",
+    "@kryxjs/core-win32-arm64-msvc": "0.2.2",
+    "@kryxjs/core-darwin-x64": "0.2.2",
+    "@kryxjs/core-darwin-arm64": "0.2.2",
+    "@kryxjs/core-linux-x64-gnu": "0.2.2",
+    "@kryxjs/core-linux-x64-musl": "0.2.2",
+    "@kryxjs/core-linux-arm64-gnu": "0.2.2"
   },
   "devDependencies": {
     "@napi-rs/cli": "2.18.4",
