@@ -29,6 +29,88 @@ pub fn shared_pool() -> SharedPool {
     Rc::new(RefCell::new(BufferPool::new()))
 }
 
+/// An RAII wrapper around a pooled buffer that recycles itself on drop.
+///
+/// This is the ergonomic layer over the explicit [`BufferPool::acquire`] /
+/// [`BufferPool::recycle`] primitive: [`acquire_guard`] hands you a guard that
+/// derefs to the underlying [`BytesMut`], and when it goes out of scope the
+/// buffer returns to the pool automatically — no manual `recycle` call, no way
+/// to forget it. Use it where scope-based cleanup reads better than the explicit
+/// call; the explicit API stays available for the cases (like `MediaBufferMut`)
+/// where the buffer's fate depends on how it's frozen.
+///
+/// ```
+/// use kc_core::buffer::{acquire_guard, shared_pool};
+///
+/// let pool = shared_pool();
+/// {
+///     let mut buf = acquire_guard(&pool, 64 * 1024);
+///     buf.extend_from_slice(b"scratch work");
+/// } // buf recycled here, automatically
+/// assert_eq!(pool.borrow().pooled_count(), 1);
+/// ```
+pub struct PoolGuard {
+    // Always Some until drop; Option lets us move the buffer out in Drop.
+    buf: Option<BytesMut>,
+    pool: SharedPool,
+}
+
+/// Acquire a buffer from `pool` wrapped in a self-recycling [`PoolGuard`].
+///
+/// The guard derefs to `BytesMut`, so it can be written to directly. When it
+/// drops, the buffer is cleared and returned to `pool`.
+pub fn acquire_guard(pool: &SharedPool, size: usize) -> PoolGuard {
+    let buf = pool.borrow_mut().acquire(size);
+    PoolGuard {
+        buf: Some(buf),
+        pool: pool.clone(),
+    }
+}
+
+impl PoolGuard {
+    /// Take the buffer out of the guard, giving up automatic recycling.
+    ///
+    /// Use this when the buffer needs to outlive the guard's scope — ownership
+    /// transfers to the caller and nothing returns to the pool.
+    pub fn into_inner(mut self) -> BytesMut {
+        self.buf.take().expect("buffer present until drop")
+    }
+}
+
+impl std::ops::Deref for PoolGuard {
+    type Target = BytesMut;
+    fn deref(&self) -> &BytesMut {
+        self.buf.as_ref().expect("buffer present until drop")
+    }
+}
+
+impl std::ops::DerefMut for PoolGuard {
+    fn deref_mut(&mut self) -> &mut BytesMut {
+        self.buf.as_mut().expect("buffer present until drop")
+    }
+}
+
+impl Drop for PoolGuard {
+    fn drop(&mut self) {
+        if let Some(mut buf) = self.buf.take() {
+            buf.clear();
+            self.pool.borrow_mut().recycle(buf);
+        }
+    }
+}
+
+impl fmt::Debug for PoolGuard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PoolGuard")
+            .field("len", &self.buf.as_ref().map(|b| b.len()).unwrap_or(0))
+            .field(
+                "capacity",
+                &self.buf.as_ref().map(|b| b.capacity()).unwrap_or(0),
+            )
+            .finish()
+    }
+}
+
 // ─── FrameFlags ──────────────────────────────────────────────────────────────
 
 bitflags::bitflags! {
@@ -488,5 +570,39 @@ mod tests {
         buf.extend(&[0xAB; 10]);
         let frame = buf.freeze().unwrap();
         assert_eq!(frame.len(), 10);
+    }
+
+    #[test]
+    fn pool_guard_recycles_on_drop() {
+        let pool = shared_pool();
+        {
+            let mut buf = acquire_guard(&pool, 64 * 1024);
+            buf.extend_from_slice(b"scratch");
+            assert_eq!(buf.len(), 7);
+        } // dropped here → recycled
+        assert_eq!(pool.borrow().pooled_count(), 1);
+        assert_eq!(pool.borrow().stats().recycled, 1);
+    }
+
+    #[test]
+    fn pool_guard_into_inner_does_not_recycle() {
+        let pool = shared_pool();
+        let buf = acquire_guard(&pool, 64 * 1024);
+        let owned = buf.into_inner(); // ownership taken out
+        assert_eq!(pool.borrow().pooled_count(), 0);
+        drop(owned); // dropping the raw BytesMut does NOT touch the pool
+        assert_eq!(pool.borrow().pooled_count(), 0);
+    }
+
+    #[test]
+    fn pool_guard_reuse_across_scopes() {
+        let pool = shared_pool();
+        {
+            let _b = acquire_guard(&pool, 4 * 1024);
+        } // recycled
+        {
+            let _b = acquire_guard(&pool, 4 * 1024); // reuses the recycled one
+        }
+        assert_eq!(pool.borrow().stats().hits, 1);
     }
 }

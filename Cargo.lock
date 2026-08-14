@@ -348,7 +348,7 @@ dependencies = [
 
 [[package]]
 name = "kc-core"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -370,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "kc-node"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "kc-core",
  "napi",

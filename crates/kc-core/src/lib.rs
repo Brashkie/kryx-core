@@ -12,7 +12,9 @@ pub mod sync;
 pub mod types;
 pub mod utils;
 
-pub use buffer::MediaBuffer;
+pub use buffer::{
+    acquire_guard, shared_pool, BufferPool, MediaBuffer, PoolGuard, PoolStats, SharedPool,
+};
 pub use error::{MediaError, Result};
 pub use pipeline::Pipeline;
 pub use types::{MediaType, Timestamp};

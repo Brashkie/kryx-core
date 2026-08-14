@@ -68,6 +68,16 @@ was driven synchronously to model one decoder worker. The threading model — a
 thread-local pool, a `Send + Sync` pool, or leaving it as-is — is a decision to
 make with benchmarks in v0.3, not preemptively.
 
+## v0.2.3 — API polish ✅ Shipped
+
+Focus: close the 0.2.x series cleanly. No new mechanics.
+
+**Done:**
+- [x] `PoolGuard` + `acquire_guard()` — RAII wrapper that recycles on drop
+      (the ergonomic layer over explicit acquire/recycle, deferred in 0.2.0).
+      `into_inner()` opts out when the buffer must outlive the guard.
+- [x] Re-export pool types at the crate root (`kc_core::BufferPool` etc.).
+
 ---
 
 ## v0.3.0 — Observability

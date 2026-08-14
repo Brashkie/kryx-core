@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.3] — 2026-08-13
+
+**API polish — closes the 0.2.x series.** No new mechanics; makes the buffer-pool
+surface pleasant to use and adds the ergonomic RAII layer deferred in 0.2.0.
+
+### Added
+- `PoolGuard` + `acquire_guard(pool, size)` — an RAII wrapper that derefs to the
+  underlying `BytesMut` and recycles itself on drop, so scope-based use never
+  forgets to recycle. `PoolGuard::into_inner()` opts out (takes ownership, no
+  recycle) when the buffer must outlive the guard. This is the layer over the
+  explicit `acquire` / `recycle` primitive, promised in 0.2.0.
+
+### Changed
+- Pool types are now re-exported at the crate root: `kc_core::BufferPool`,
+  `PoolStats`, `SharedPool`, `shared_pool`, `PoolGuard`, `acquire_guard` — no
+  need to reach into `kc_core::buffer::*`. The explicit primitive and the
+  `MediaBufferMut` freeze routes are unchanged.
+
+### The 0.2.x series
+- **0.2.0** — `BufferPool` + Criterion benchmarks (pool wins ~4×–830×).
+- **0.2.1** — pool integrated into `MediaBufferMut` (copy+recycle and zero-copy
+  freeze routes).
+- **0.2.2** — end-to-end decoder-loop validation (~99% hit rate; found that
+  `SharedPool` is single-threaded, an input to v0.3's threading decision).
+- **0.2.3** — API polish + RAII guard (this release).
+
 ## [0.2.2] — 2026-08-12
 
 **End-to-end pool validation.** Adds a decoder-shaped benchmark that measures the
