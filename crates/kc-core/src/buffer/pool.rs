@@ -212,6 +212,45 @@ impl BufferPool {
         self.buckets.iter().map(Vec::len).sum()
     }
 
+    /// Pre-warm the pool: allocate `count` buffers sized for `size` and file them
+    /// into the matching bucket, so the first `count` acquires of that size are
+    /// hits instead of misses.
+    ///
+    /// A pipeline that will process frames of a known size can call this at
+    /// startup to pay the allocation cost up front (and fault the pages in)
+    /// rather than during the first frames, when latency usually matters most.
+    /// Respects the per-bucket cap: requests beyond the cap are not allocated.
+    /// Requests for a size above the largest bucket are ignored (those are never
+    /// pooled). Prewarmed buffers count as `recycled` in the stats.
+    pub fn reserve(&mut self, size: usize, count: usize) {
+        let idx = match Self::bucket_index(size) {
+            Some(idx) => idx,
+            None => return, // oversized — never pooled
+        };
+        let capacity = BUCKET_SIZES[idx];
+        let room = self.max_per_bucket.saturating_sub(self.buckets[idx].len());
+        for _ in 0..count.min(room) {
+            self.buckets[idx].push(BytesMut::with_capacity(capacity));
+            self.stats.recycled += 1;
+        }
+    }
+
+    /// Total capacity, in bytes, currently retained by pooled buffers.
+    ///
+    /// This is the memory the pool is holding onto for reuse — the number to
+    /// watch for the pool's footprint, distinct from [`pooled_count`] (how many
+    /// buffers) and from the hit-rate stats (how effective). Computed from each
+    /// bucket's size times how many buffers it holds.
+    ///
+    /// [`pooled_count`]: Self::pooled_count
+    pub fn memory_used(&self) -> usize {
+        self.buckets
+            .iter()
+            .enumerate()
+            .map(|(idx, bucket)| bucket.len() * BUCKET_SIZES[idx])
+            .sum()
+    }
+
     /// Drop every retained buffer, releasing their memory. Stats are kept.
     pub fn clear(&mut self) {
         for bucket in &mut self.buckets {
@@ -345,5 +384,43 @@ mod tests {
         assert_eq!(pool.pooled_count(), 3);
         pool.clear();
         assert_eq!(pool.pooled_count(), 0);
+    }
+
+    #[test]
+    fn reserve_prewarms_and_turns_first_acquires_into_hits() {
+        let mut pool = BufferPool::new();
+        pool.reserve(64 * 1024, 4);
+        assert_eq!(pool.pooled_count(), 4);
+        assert_eq!(pool.stats().recycled, 4);
+        // The next acquires of that size are hits, not misses.
+        let _ = pool.acquire(60 * 1024); // → 64 KiB bucket
+        assert_eq!(pool.stats().hits, 1);
+        assert_eq!(pool.stats().misses, 0);
+    }
+
+    #[test]
+    fn reserve_respects_bucket_cap() {
+        let mut pool = BufferPool::with_max_per_bucket(2);
+        pool.reserve(4 * 1024, 10); // asks 10, cap is 2
+        assert_eq!(pool.pooled_count(), 2);
+    }
+
+    #[test]
+    fn reserve_ignores_oversized() {
+        let mut pool = BufferPool::new();
+        pool.reserve(8 * 1024 * 1024, 3); // > 4 MiB max bucket
+        assert_eq!(pool.pooled_count(), 0);
+    }
+
+    #[test]
+    fn memory_used_reports_retained_bytes() {
+        let mut pool = BufferPool::new();
+        assert_eq!(pool.memory_used(), 0);
+        pool.reserve(64 * 1024, 3); // three 64 KiB buffers
+        assert_eq!(pool.memory_used(), 3 * 64 * 1024);
+        pool.reserve(1024 * 1024, 1); // + one 1 MiB
+        assert_eq!(pool.memory_used(), 3 * 64 * 1024 + 1024 * 1024);
+        pool.clear();
+        assert_eq!(pool.memory_used(), 0);
     }
 }

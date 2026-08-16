@@ -103,10 +103,7 @@ impl fmt::Debug for PoolGuard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PoolGuard")
             .field("len", &self.buf.as_ref().map(|b| b.len()).unwrap_or(0))
-            .field(
-                "capacity",
-                &self.buf.as_ref().map(|b| b.capacity()).unwrap_or(0),
-            )
+            .field("capacity", &self.buf.as_ref().map(|b| b.capacity()).unwrap_or(0))
             .finish()
     }
 }
@@ -457,9 +454,7 @@ impl MediaBufferMut {
             pool,
         } = self;
         // Copy the written bytes out before the scratch goes back to the pool.
-        let out = MediaBuffer::builder(media_type)
-            .data(inner.to_vec())
-            .build();
+        let out = MediaBuffer::builder(media_type).data(inner.to_vec()).build();
         if let Some(pool) = pool {
             inner.clear();
             pool.borrow_mut().recycle(inner);
