@@ -534,19 +534,17 @@ When in doubt, [open a discussion](https://github.com/Brashkie/kryx-core/discuss
 
 ## Roadmap
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for the full plan.
+Kryx-core is built in **phases** — see [docs/ROADMAP.md](docs/ROADMAP.md) for the
+full plan with per-item version annotations.
 
-| Version | Focus | Target |
-|---------|-------|--------|
-| **0.1.x** | Foundations | ✅ Shipped |
-| **0.2** | Performance — `BufferPool` + benchmarks | ✅ Shipped |
-| **0.2.1** | `BufferPool` integration into `MediaBufferMut` | ✅ Shipped |
-| **0.2.2** | End-to-end pool validation (decoder-loop bench) | ✅ Shipped |
-| **0.2.3** | API polish + RAII `PoolGuard` (closes 0.2.x) | ✅ Shipped |
-| **0.3** | Observability — pipeline metrics + tracing spans | Q3 2026 |
-| **0.4** | GPU buffer abstractions + hw-accel primitives | Q4 2026 |
-| **0.5** | Real-time / streaming (RTP, WebRTC types, jitter buffer) | 2027 |
-| **1.0** | Stable API + all Kryx packages on top | 2027 |
+| Phase | Focus | Status |
+|-------|-------|--------|
+| **1 — Buffer foundation** | Zero-copy buffers + `BufferPool` (recycling, pre-warm, RAII, benchmarks) | ✅ Complete |
+| **2 — Pipeline & execution** | Stages, composition, pool threading model | 🟡 Partial |
+| **3 — Observability** | Per-stage metrics + tracing spans | 🔴 Planned |
+| **4 — GPU primitives** | `GpuBuffer` over Vulkan / Metal / D3D12 | 🔵 Designed |
+| **5 — Real-time & streaming** | Jitter buffer, bitrate estimation, RTP types | 🔴 Planned |
+| **6 — Stability** | API freeze, 1.0, plugin system | 🔴 Planned |
 
 ---
 

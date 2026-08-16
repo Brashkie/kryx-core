@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.4] — 2026-08-14
+
+**Phase 1 hardening + roadmap restructure.** Strengthens the buffer-pool
+foundation with pre-warming and memory observability, and reorganizes the roadmap
+around phases instead of version numbers.
+
+### Added
+- `BufferPool::reserve(size, count)` — pre-warm the pool by allocating `count`
+  buffers sized for `size`, so a pipeline's first acquires are hits instead of
+  misses (pay the allocation + page-fault cost at startup, not on the first
+  frames). Respects the per-bucket cap; ignores sizes above the largest bucket.
+- `BufferPool::memory_used()` — total bytes currently retained by pooled buffers,
+  for footprint observability (distinct from `pooled_count()` and the hit-rate
+  stats).
+
+### Changed
+- **Roadmap restructured into phases.** `docs/ROADMAP.md` now describes phases of
+  evolution (Buffer foundation, Pipeline & execution, Observability, GPU, Real-time,
+  Stability) with each shipped item annotated by the version it landed in, rather
+  than a version-by-version list. Versions are a consequence of releases; the phase
+  is what the work builds toward. Also removed duplicate v0.4/v0.5 sections the old
+  structure had accumulated.
+
+### Notes
+- Phase 1 (Buffer foundation) is now feature-complete for the pool's core: still
+  open are `PoolConfig` (configurable buckets) and `shrink_to()` (shed memory
+  under pressure), both marked planned.
+
 ## [0.2.3] — 2026-08-13
 
 **API polish — closes the 0.2.x series.** No new mechanics; makes the buffer-pool
