@@ -111,14 +111,14 @@
     "@types/node": "^20.11.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
-    "@vitest/coverage-v8": "^1.2.0",
-    "@vitest/ui": "^1.2.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/ui": "^4.1.10",
     "cross-env": "^7.0.3",
     "eslint": "^8.57.0",
     "prettier": "^3.2.0",
     "tsup": "^8.0.1",
     "tsx": "^4.7.0",
     "typescript": "^6.0.3",
-    "vitest": "^1.2.0"
+    "vitest": "^4.1.10"
   }
 }
