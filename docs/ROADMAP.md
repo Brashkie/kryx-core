@@ -42,8 +42,10 @@ high-throughput pipeline cheap, all measured rather than assumed.
       are hits, not misses (v0.2.4)
 - [x] **`memory_used()`** — bytes currently retained by the pool, for footprint
       observability (v0.2.4)
+- [x] **`shrink_to()` / `shrink_to_bytes()`** — shed retained buffers under
+      memory pressure (per-bucket cap or byte budget), the companion to
+      `memory_used()` (v0.2.5)
 - [ ] 🔴 `PoolConfig` — configurable bucket range and caps per use case
-- [ ] 🔴 `shrink_to()` — shed retained buffers under memory pressure
 
 ---
 
@@ -55,9 +57,12 @@ story worked out.
 - [x] `Stage` trait — async `process(MediaBuffer) -> Vec<MediaBuffer>` (v0.1.0)
 - [x] `Pipeline` — ordered stage composition, pass-through, fan-out (v0.1.0)
 - [x] Cancellation across stages (v0.1.0)
-- [ ] 🔴 **Pool threading model** — decide thread-local vs `Send + Sync` pool for
-      use inside a `Stage`, with benchmarks (the v0.2.2 finding: `SharedPool` is
-      single-threaded and can't be a `Stage` field)
+- [x] 🟡 **Pool threading benchmark** — `arc_mutex` vs `thread_local` vs baseline
+      under concurrent load, so the model is chosen with numbers (v0.2.5). The
+      v0.2.2 finding (`SharedPool` is single-threaded, can't be a `Stage` field)
+      now has a measurement tool.
+- [ ] 🔴 **Pool threading model** — adopt the winner from the benchmark into core
+      (a `Send + Sync` shared pool, a per-worker pool pattern, or leave as-is)
 - [ ] 🔴 Producer/consumer between stages with bounded queues
 - [ ] 🔴 Multi-source pipelines (mux several inputs)
 

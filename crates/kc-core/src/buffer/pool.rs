@@ -257,6 +257,47 @@ impl BufferPool {
             bucket.clear();
         }
     }
+
+    /// Reduce every bucket to at most `max_per_bucket` retained buffers, dropping
+    /// the excess and releasing their memory.
+    ///
+    /// The companion to [`memory_used`]: when that number climbs past a budget,
+    /// `shrink_to` sheds retained buffers to bring the footprint back down
+    /// without clearing the pool entirely (unlike [`clear`]). Buffers kept are
+    /// still available for reuse; only the surplus beyond `max` is freed. Dropped
+    /// buffers are not counted in `PoolStats` (they were never handed out — this
+    /// is memory management, not a recycle event).
+    ///
+    /// [`memory_used`]: Self::memory_used
+    /// [`clear`]: Self::clear
+    pub fn shrink_to(&mut self, max_per_bucket: usize) {
+        for bucket in &mut self.buckets {
+            bucket.truncate(max_per_bucket);
+        }
+    }
+
+    /// Reduce the pool's retained memory to at most `budget` bytes (best effort).
+    ///
+    /// Drops whole buffers, largest buckets first, until [`memory_used`] is at or
+    /// below `budget`. Because it frees whole buffers, the result may end up below
+    /// the budget rather than exactly at it. Useful as a reaction to memory
+    /// pressure when a per-bucket count isn't the natural knob.
+    ///
+    /// [`memory_used`]: Self::memory_used
+    pub fn shrink_to_bytes(&mut self, budget: usize) {
+        // Walk buckets from largest to smallest, dropping buffers until we're
+        // under budget — freeing a big buffer reclaims the most per drop.
+        for idx in (0..self.buckets.len()).rev() {
+            while self.memory_used() > budget {
+                if self.buckets[idx].pop().is_none() {
+                    break; // this bucket is empty; move to the next smaller one
+                }
+            }
+            if self.memory_used() <= budget {
+                break;
+            }
+        }
+    }
 }
 
 impl Default for BufferPool {
@@ -422,5 +463,28 @@ mod tests {
         assert_eq!(pool.memory_used(), 3 * 64 * 1024 + 1024 * 1024);
         pool.clear();
         assert_eq!(pool.memory_used(), 0);
+    }
+
+    #[test]
+    fn shrink_to_caps_each_bucket() {
+        let mut pool = BufferPool::new();
+        pool.reserve(64 * 1024, 10); // 10 in the 64 KiB bucket
+        pool.reserve(4 * 1024, 10); // 10 in the 4 KiB bucket
+        assert_eq!(pool.pooled_count(), 20);
+        pool.shrink_to(3); // at most 3 per bucket
+        assert_eq!(pool.pooled_count(), 6); // 3 + 3
+    }
+
+    #[test]
+    fn shrink_to_bytes_frees_largest_first() {
+        let mut pool = BufferPool::new();
+        pool.reserve(1024 * 1024, 2); // 2 MiB in 1 MiB bucket
+        pool.reserve(64 * 1024, 4); // 256 KiB in 64 KiB bucket
+        let before = pool.memory_used();
+        assert_eq!(before, 2 * 1024 * 1024 + 4 * 64 * 1024);
+        // Budget below total: must drop the big 1 MiB buffers first.
+        pool.shrink_to_bytes(512 * 1024);
+        assert!(pool.memory_used() <= 512 * 1024);
+        // The 1 MiB buffers (largest) should be gone; small ones may remain.
     }
 }

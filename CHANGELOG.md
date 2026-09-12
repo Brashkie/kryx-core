@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.5] — 2026-08-16
+
+**Threading benchmark + Phase 1 completion.** Measures how the pool should be
+shared across concurrent workers (the open Phase 2 question), and adds the
+memory-pressure knobs that finish Phase 1's pool surface.
+
+### Added
+- `benches/threading.rs` — Criterion benchmark comparing three ways to use the
+  pool under `WORKERS` concurrent threads: `no_pool` (baseline, fresh alloc per
+  frame — what a `Stage` does today), `arc_mutex` (one `Arc<Mutex<BufferPool>>`
+  shared by all workers, with lock contention), and `thread_local` (a private
+  pool per worker, no lock). The numbers decide whether core should ship a
+  `Send + Sync` shared pool, a per-worker pool pattern, or leave the pool
+  single-threaded — resolving the v0.2.2 finding with measurement, not guesswork.
+- `BufferPool::shrink_to(max_per_bucket)` — cap every bucket to at most `max`
+  retained buffers, freeing the rest. The companion to `memory_used()`: shed
+  footprint under memory pressure without clearing the pool entirely.
+- `BufferPool::shrink_to_bytes(budget)` — drop whole buffers, largest bucket
+  first, until retained memory is at or below `budget` bytes.
+
+### Notes
+- `shrink_to` / `shrink_to_bytes` complete Phase 1 (Buffer foundation): the pool
+  now covers acquire/recycle, pre-warm, RAII, stats, memory observability, and
+  memory-pressure relief. `PoolConfig` (configurable buckets) remains the only
+  planned Phase 1 item, deferred until a real use case needs non-default buckets.
+- Run `cargo bench --bench threading` to see the concurrency numbers on your
+  hardware; the right threading model is machine- and workload-dependent, so the
+  bench is the tool for deciding, shipped alongside the honest trade-off notes.
+
 ## [0.2.4] — 2026-08-14
 
 **Phase 1 hardening + roadmap restructure.** Strengthens the buffer-pool
