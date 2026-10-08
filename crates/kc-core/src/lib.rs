@@ -14,9 +14,12 @@ pub mod utils;
 
 pub use buffer::{
     acquire_guard, shared_pool, BufferPool, MediaBuffer, PoolGuard, PoolStats, SharedPool,
+    WorkerPool,
 };
 pub use error::{MediaError, Result};
-pub use pipeline::Pipeline;
+pub use pipeline::{
+    BackpressureDecision, BackpressurePolicy, LoadMetrics, NoBackpressure, Pipeline,
+};
 pub use types::{MediaType, Timestamp};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

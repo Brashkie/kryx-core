@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.6] — 2026-10-08
+
+**Pool threading model adopted + generic backpressure hook.** Resolves the open
+Phase 2 question with the v0.2.5 benchmark result, and lays the core side of the
+backpressure boundary — the mechanism, never the policy.
+
+### Added
+- `WorkerPool` — a `Send + Sync`, per-thread pooling handle. Each worker thread
+  transparently uses its own `BufferPool` (backed by `thread_local!`), with no
+  lock and no cross-thread sharing. This is the pattern the threading benchmark
+  chose: a private pool per worker won at every frame size, while a shared
+  `Arc<Mutex<BufferPool>>` lost to no pooling at all on small frames (the lock
+  cost more than it saved). Unlike `SharedPool` (`Rc<RefCell<_>>`, single-thread),
+  `WorkerPool` owns no data, so it *can* live inside a `Send + Sync` `Stage`.
+- `LoadMetrics` — a generic, uninterpreted snapshot of stage load: queue depth
+  and capacity, retained bytes, latency, dropped count, plus a `queue_depth_ratio()`
+  helper. Built with chainable `with_*` setters.
+- `BackpressurePolicy` trait + `BackpressureDecision` (`Proceed` / `ShedLoad { severity }`
+  / `Pause`) + `NoBackpressure` null policy. A caller in a higher layer implements
+  the policy; core only defines the trait and carries the verdict.
+- `Stage::load() -> Option<LoadMetrics>` — default `None`, so every existing stage
+  is unaffected. A stage with a queue or memory to report overrides it.
+
+### Design
+- **Core provides the mechanism, never the policy.** A codec that wants
+  rate-distortion or perceptual (JND) control reads these generic saturation
+  numbers and decides *inside the codec* what to prune or requantize. `kc-core`
+  never learns what a dictionary atom or a perceptual threshold is — interpretation
+  rises to the layer that has the knowledge (Kryx Rule 1 & 2). The sparse-matrix /
+  R-D structures from the research notes belong in a future codec package, not here.
+
 ## [0.2.5] — 2026-08-16
 
 **Threading benchmark + Phase 1 completion.** Measures how the pool should be

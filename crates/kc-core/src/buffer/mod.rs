@@ -13,6 +13,9 @@ use crate::types::{CodecId, MediaType, PixelFormat, SampleFormat, Timebase, Time
 mod pool;
 pub use pool::{BufferPool, PoolStats};
 
+mod worker_pool;
+pub use worker_pool::WorkerPool;
+
 pub const MAX_BUFFER_SIZE: usize = 256 * 1024 * 1024; // 256 MiB
 
 /// A shared, single-threaded handle to a [`BufferPool`].

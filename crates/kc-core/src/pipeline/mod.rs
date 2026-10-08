@@ -11,6 +11,9 @@ use crate::buffer::MediaBuffer;
 use crate::error::{PipelineError, Result};
 use crate::types::MediaType;
 
+mod backpressure;
+pub use backpressure::{BackpressureDecision, BackpressurePolicy, LoadMetrics, NoBackpressure};
+
 // ─── StageContext ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -46,6 +49,15 @@ pub trait Stage: Send + Sync + fmt::Debug {
         Ok(())
     }
     fn accepts(&self) -> Option<&[MediaType]> {
+        None
+    }
+
+    /// Report this stage's current load, for a caller-supplied
+    /// [`BackpressurePolicy`] to act on. Returns `None` by default: a stage that
+    /// has no queue or memory to report opts out, and backpressure is skipped
+    /// for it. Core only gathers these generic numbers — it never interprets
+    /// them; the policy (in a higher layer) decides what they mean.
+    fn load(&self) -> Option<LoadMetrics> {
         None
     }
 }

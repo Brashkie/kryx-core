@@ -57,12 +57,18 @@ story worked out.
 - [x] `Stage` trait — async `process(MediaBuffer) -> Vec<MediaBuffer>` (v0.1.0)
 - [x] `Pipeline` — ordered stage composition, pass-through, fan-out (v0.1.0)
 - [x] Cancellation across stages (v0.1.0)
-- [x] 🟡 **Pool threading benchmark** — `arc_mutex` vs `thread_local` vs baseline
-      under concurrent load, so the model is chosen with numbers (v0.2.5). The
-      v0.2.2 finding (`SharedPool` is single-threaded, can't be a `Stage` field)
-      now has a measurement tool.
-- [ ] 🔴 **Pool threading model** — adopt the winner from the benchmark into core
-      (a `Send + Sync` shared pool, a per-worker pool pattern, or leave as-is)
+- [x] **Pool threading benchmark** — `arc_mutex` vs `thread_local` vs baseline
+      under concurrent load, so the model was chosen with numbers (v0.2.5).
+- [x] **Pool threading model — `WorkerPool`** — the benchmark's verdict, adopted:
+      a `Send + Sync` per-thread pooling handle (`thread_local!` under the hood),
+      no lock, no sharing. The private-pool-per-worker strategy won at every frame
+      size; the shared `Arc<Mutex>` lost to no pooling at all on small frames.
+      Resolves the v0.2.2 finding — the pool now works inside a `Send + Sync`
+      `Stage` without being made lock-guarded (v0.2.6).
+- [x] **Generic backpressure hook** — `LoadMetrics` + `BackpressurePolicy` +
+      `BackpressureDecision`, with `Stage::load()`. Core reports saturation; the
+      policy (in a higher layer) decides what it means. The mechanism, never the
+      policy (v0.2.6).
 - [ ] 🔴 Producer/consumer between stages with bounded queues
 - [ ] 🔴 Multi-source pipelines (mux several inputs)
 
