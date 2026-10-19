@@ -19,6 +19,7 @@ pub use buffer::{
 pub use error::{MediaError, Result};
 pub use pipeline::{
     BackpressureDecision, BackpressurePolicy, LoadMetrics, NoBackpressure, Pipeline,
+    PipelineMetrics, StageMetrics, StageMetricsSnapshot,
 };
 pub use types::{MediaType, Timestamp};
 

@@ -14,6 +14,9 @@ use crate::types::MediaType;
 mod backpressure;
 pub use backpressure::{BackpressureDecision, BackpressurePolicy, LoadMetrics, NoBackpressure};
 
+mod metrics;
+pub use metrics::{PipelineMetrics, StageMetrics, StageMetricsSnapshot};
+
 // ─── StageContext ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
@@ -68,6 +71,8 @@ pub struct Pipeline {
     name: Arc<str>,
     stages: Vec<Arc<dyn Stage>>,
     ctx: RwLock<StageContext>,
+    /// One metrics counter per stage, in the same order as `stages`.
+    metrics: Vec<StageMetrics>,
 }
 
 impl fmt::Debug for Pipeline {
@@ -122,10 +127,39 @@ impl Pipeline {
         };
 
         let mut current = vec![buf];
-        for stage in &self.stages {
+        for (idx, stage) in self.stages.iter().enumerate() {
+            let m = &self.metrics[idx];
             let mut next = Vec::new();
             for frame in current {
-                next.extend(stage.process(frame, &ctx).await?);
+                m.record_in(frame.len() as u64);
+                let started = Instant::now();
+
+                // `.instrument()` enters the span only while the future is
+                // polled — the async-correct way (never hold `.entered()` across
+                // an `.await`). Feature-gated: zero cost when `trace-spans` is off.
+                let produced = {
+                    #[cfg(feature = "trace-spans")]
+                    {
+                        use tracing::Instrument;
+                        stage
+                            .process(frame, &ctx)
+                            .instrument(tracing::info_span!(
+                                "stage",
+                                name = stage.name(),
+                                frame = ctx.frame_count,
+                            ))
+                            .await?
+                    }
+                    #[cfg(not(feature = "trace-spans"))]
+                    {
+                        stage.process(frame, &ctx).await?
+                    }
+                };
+
+                let latency_ns = started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
+                let out_bytes: u64 = produced.iter().map(|b| b.len() as u64).sum();
+                m.record_out(produced.len() as u64, out_bytes, latency_ns);
+                next.extend(produced);
             }
             current = next;
             if current.is_empty() {
@@ -133,6 +167,29 @@ impl Pipeline {
             }
         }
         Ok(current)
+    }
+
+    /// Snapshot this pipeline's per-stage metrics (Phase 3 observability).
+    ///
+    /// Returns one [`StageMetricsSnapshot`] per stage, in order, filled by every
+    /// `process` call so far. Core reports the numbers; a caller decides what to
+    /// do with them (log, export, feed a `BackpressurePolicy`).
+    pub fn metrics(&self) -> PipelineMetrics {
+        PipelineMetrics {
+            stages: self
+                .stages
+                .iter()
+                .zip(self.metrics.iter())
+                .map(|(stage, m)| (stage.name(), m.snapshot()))
+                .collect(),
+        }
+    }
+
+    /// Reset every stage's metrics counters to zero.
+    pub fn reset_metrics(&self) {
+        for m in &self.metrics {
+            m.reset();
+        }
     }
 
     pub async fn process_batch(&self, bufs: Vec<MediaBuffer>) -> Result<Vec<MediaBuffer>> {
@@ -180,10 +237,14 @@ impl PipelineBuilder {
             return Err(PipelineError::Empty.into());
         }
         let name: Arc<str> = Arc::from(self.name.as_str());
+        let metrics = (0..self.stages.len())
+            .map(|_| StageMetrics::new())
+            .collect();
         Ok(Pipeline {
             ctx: RwLock::new(StageContext::new(Arc::clone(&name))),
             name,
             stages: self.stages,
+            metrics,
         })
     }
 }
@@ -268,5 +329,48 @@ mod tests {
     #[tokio::test]
     async fn empty_pipeline_errors() {
         assert!(Pipeline::builder().build().is_err());
+    }
+
+    #[tokio::test]
+    async fn metrics_track_frames_through_stages() {
+        let p = Pipeline::builder()
+            .stage(PassthroughStage)
+            .stage(CounterStage::new())
+            .build()
+            .unwrap();
+        for _ in 0..3 {
+            p.process(buf()).await.unwrap();
+        }
+        let m = p.metrics();
+        assert_eq!(m.stages.len(), 2);
+        assert_eq!(m.frames_processed(), 3);
+        // Both stages are pass-through: 3 in, 3 out each, nothing dropped.
+        for (_, s) in &m.stages {
+            assert_eq!(s.frames_in, 3);
+            assert_eq!(s.frames_out, 3);
+            assert_eq!(s.frames_dropped, 0);
+            assert_eq!(s.bytes_in, 3 * 32);
+        }
+        assert_eq!(m.total_dropped(), 0);
+    }
+
+    #[tokio::test]
+    async fn metrics_count_drops() {
+        let p = Pipeline::builder().stage(DropStage).build().unwrap();
+        p.process(buf()).await.unwrap();
+        let m = p.metrics();
+        let (_, s) = &m.stages[0];
+        assert_eq!(s.frames_in, 1);
+        assert_eq!(s.frames_out, 0);
+        assert_eq!(s.frames_dropped, 1);
+        assert_eq!(m.total_dropped(), 1);
+    }
+
+    #[tokio::test]
+    async fn reset_metrics_clears_counters() {
+        let p = Pipeline::builder().stage(PassthroughStage).build().unwrap();
+        p.process(buf()).await.unwrap();
+        p.reset_metrics();
+        assert_eq!(p.metrics().frames_processed(), 0);
     }
 }

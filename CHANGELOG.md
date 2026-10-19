@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.7] — 2026-10-19
+
+**Phase 3 — Observability.** The pipeline now measures itself: per-stage metrics
+filled as it runs, plus feature-gated tracing spans. Closes the loop opened in
+0.2.6 — the backpressure hook finally has real numbers to read.
+
+### Added
+- `StageMetrics` — lock-free (atomic) per-stage counters: frames in/out/dropped,
+  bytes in/out, cumulative latency. Recorded automatically inside `Pipeline::process`
+  with no API change to any stage.
+- `StageMetricsSnapshot` — an immutable readout with `mean_latency_ms()` and
+  `fanout()` (output frames per input: 1.0 pass-through, <1 drop/merge, >1 split).
+- `PipelineMetrics` — one snapshot per stage in order, with `frames_processed()`
+  and `total_dropped()`. Returned by `Pipeline::metrics()`; `reset_metrics()` clears.
+- `StageMetrics::to_load_metrics()` — turns real measurements into the generic
+  `LoadMetrics` a `BackpressurePolicy` reads (connects Phase 3 → the 0.2.6 hook).
+- `trace-spans` feature — emits a `tracing` span around every stage execution,
+  via `.instrument()` (async-correct; the span is entered only while the future
+  is polled). Off by default: zero cost when not enabled.
+
+### Design
+- Observability stays generic: core counts frames, bytes, and time — it never
+  interprets them. What the numbers mean (quality, perceptual budget, R-D) is the
+  caller's decision, in a higher layer. Metrics use `Relaxed` atomics (statistics,
+  not synchronization) so a stage under `&self` records without a lock.
+
 ## [0.2.6] — 2026-10-08
 
 **Pool threading model adopted + generic backpressure hook.** Resolves the open

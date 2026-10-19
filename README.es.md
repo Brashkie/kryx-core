@@ -541,7 +541,7 @@ el plan completo con la versión anotada por ítem.
 |------|------|--------|
 | **1 — Fundación de buffers** | Buffers zero-copy + `BufferPool` (reciclado, pre-warm, RAII, benchmarks) | ✅ Completa |
 | **2 — Pipeline y ejecución** | Stages, threading con `WorkerPool`, hook genérico de backpressure | 🟡 Parcial |
-| **3 — Observabilidad** | Métricas por-stage + tracing spans | 🔴 Planeada |
+| **3 — Observabilidad** | Métricas por-stage, feed de backpressure, tracing spans | 🟡 Parcial |
 | **4 — Primitivas GPU** | `GpuBuffer` sobre Vulkan / Metal / D3D12 | 🔵 Diseñada |
 | **5 — Tiempo real y streaming** | Jitter buffer, estimación de bitrate, tipos RTP | 🔴 Planeada |
 | **6 — Estabilidad** | Freeze de API, 1.0, sistema de plugins | 🔴 Planeada |

@@ -36,6 +36,9 @@ serde_json = { workspace = true, optional = true }
 [features]
 default = []
 serde = ["dep:serde", "dep:serde_json"]
+# Emit a `tracing` span around every stage execution (Phase 3 observability).
+# Off by default: zero cost when not enabled; turn on for debugging/profiling.
+trace-spans = []
 # Link against real Zig modules. Without this feature, internal stubs are used,
 # so the crate is always usable for development and testing.
 link-zig = []

@@ -74,15 +74,20 @@ story worked out.
 
 ---
 
-## 🔴 Phase 3 — Observability
+## 🟡 Phase 3 — Observability
 
-See what the pipeline is doing, at low cost — and the right place to settle the
-pool's threading model with real numbers.
+See what the pipeline is doing, at low cost. Core counts; the caller interprets.
 
-- [ ] 🔴 Pipeline metrics: per-stage throughput, allocation counts, drift
-- [ ] 🔴 Optional `metrics` feature (via the `metrics` crate)
-- [ ] 🔴 Tracing spans on every stage execution (via `tracing` feature)
-- [ ] 🔴 Backpressure and queue-depth reporting between stages
+- [x] **Per-stage metrics** — `StageMetrics` (lock-free atomics): frames in/out/
+      dropped, bytes, latency, filled automatically inside `process`. Snapshotted
+      via `Pipeline::metrics()` → `PipelineMetrics` (v0.2.7)
+- [x] **Backpressure/queue-depth reporting** — `StageMetrics::to_load_metrics()`
+      turns real counters into the generic `LoadMetrics` a `BackpressurePolicy`
+      reads, closing the loop with the 0.2.6 hook (v0.2.7)
+- [x] **Tracing spans** — `trace-spans` feature wraps each stage execution in a
+      `tracing` span via `.instrument()`; off by default, zero cost (v0.2.7)
+- [ ] 🔴 Optional `metrics`-crate exporter (Prometheus/StatsD sink)
+- [ ] 🔴 Drift/jitter tracking between stages over time
 
 ---
 
