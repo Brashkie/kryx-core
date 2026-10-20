@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] — 2026-10-20
+
+**Streaming execution — Phase 2 complete.** The headline change: a pipeline that
+runs every stage concurrently over bounded queues, instead of one frame at a time.
+This ties together everything from the 0.2.x line — `WorkerPool`, the backpressure
+hook, and the metrics — into one working execution model.
+
+### Added
+- **`StreamPipeline`** + `StreamPipelineBuilder` — each stage runs as its own
+  task, connected by **bounded** channels. While a downstream stage works on
+  frame *n*, upstream is already on *n+1*: true pipeline parallelism, not
+  sequential `process`. The queue `capacity` is the buffering budget between
+  stages; a fast stage can't outrun a slow one.
+- **Real backpressure.** Before processing each frame, a stage derives generic
+  `LoadMetrics` from its live counters and asks the caller's `BackpressurePolicy`:
+  `ShedLoad` drops the frame, `Pause` backs off. The policy from 0.2.6 is no
+  longer theoretical — it now governs a running pipeline.
+- **Multi-source.** `run_to_vec(sources)` muxes several input streams into the
+  first stage via concurrent producer tasks.
+- Per-stage metrics are fed exactly as in `Pipeline::process`, readable with
+  `StreamPipeline::metrics()`.
+
+### Changed / fixed
+- Avoided a classic async pitfall in the stream executor: the backpressure
+  decision is taken into a binding so the (non-`Send`) lock guard is dropped
+  before any `.await` — the pipeline stays `Send` and spawnable.
+- Minor cleanup in the executor's channel/receiver handling.
+
+### Performance
+- Concurrent stages overlap work across cores; a multi-stage pipeline no longer
+  serializes on the slowest stage per frame. Bounded queues keep memory flat
+  under load (the capacity caps in-flight frames), and `WorkerPool` gives each
+  stage task its own lock-free pool.
+
+### Notes
+- `Pipeline` (sequential, one-frame `process`) stays as the simple path; nothing
+  about it changed. `StreamPipeline` is the choice when throughput matters.
+
 ## [0.2.7] — 2026-10-19
 
 **Phase 3 — Observability.** The pipeline now measures itself: per-stage metrics

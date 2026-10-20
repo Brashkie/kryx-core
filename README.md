@@ -251,6 +251,44 @@ Timebase.AUDIO_48K.rescale(1_000_000_000, Timebase.MILLISECOND)
 // → 20833333 (precise integer, no rounding error)
 ```
 
+### 8. Streaming pipeline — concurrent stages, bounded queues _(Rust core, new in 0.3.0)_
+
+Every stage runs as its own task over a **bounded** queue, so stages overlap work
+across cores. Backpressure drives a caller-supplied policy; per-stage metrics are
+collected live. Multiple sources are muxed into the first stage.
+
+```rust
+use kc_core::{StreamPipeline, PassthroughStage};
+use kc_core::pipeline::{BackpressurePolicy, BackpressureDecision, LoadMetrics};
+
+// A policy lives in the caller's layer — core never interprets the numbers.
+struct ShedWhenFull;
+impl BackpressurePolicy for ShedWhenFull {
+    fn decide(&mut self, m: &LoadMetrics) -> BackpressureDecision {
+        if m.queue_depth_ratio() > 0.8 {
+            BackpressureDecision::ShedLoad { severity: 1.0 }
+        } else {
+            BackpressureDecision::Proceed
+        }
+    }
+}
+
+let sp = StreamPipeline::builder()
+    .name("decode")
+    .capacity(64)                 // bounded queue depth between stages
+    .stage(PassthroughStage)
+    .policy(ShedWhenFull)
+    .build()?;
+
+// Two sources, muxed and run concurrently through the pipeline.
+let out = sp.run_to_vec(vec![source_a, source_b]).await?;
+
+// Live observability (Phase 3):
+for (name, s) in sp.metrics().stages {
+    println!("{name}: {} in / {} out, {:.2}ms avg", s.frames_in, s.frames_out, s.mean_latency_ms());
+}
+```
+
 ---
 
 ## Core concepts
@@ -540,7 +578,7 @@ full plan with per-item version annotations.
 | Phase | Focus | Status |
 |-------|-------|--------|
 | **1 — Buffer foundation** | Zero-copy buffers + `BufferPool` (recycling, pre-warm, RAII, benchmarks) | ✅ Complete |
-| **2 — Pipeline & execution** | Stages, `WorkerPool` threading, generic backpressure hook | 🟡 Partial |
+| **2 — Pipeline & execution** | Stages, `WorkerPool`, `StreamPipeline` (bounded queues, backpressure, multi-source) | ✅ Complete |
 | **3 — Observability** | Per-stage metrics, backpressure feed, tracing spans | 🟡 Partial |
 | **4 — GPU primitives** | `GpuBuffer` over Vulkan / Metal / D3D12 | 🔵 Designed |
 | **5 — Real-time & streaming** | Jitter buffer, bitrate estimation, RTP types | 🔴 Planned |

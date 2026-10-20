@@ -17,6 +17,9 @@ pub use backpressure::{BackpressureDecision, BackpressurePolicy, LoadMetrics, No
 mod metrics;
 pub use metrics::{PipelineMetrics, StageMetrics, StageMetricsSnapshot};
 
+mod stream;
+pub use stream::{StreamPipeline, StreamPipelineBuilder};
+
 // ─── StageContext ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]

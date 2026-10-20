@@ -49,10 +49,10 @@ high-throughput pipeline cheap, all measured rather than assumed.
 
 ---
 
-## 🟡 Phase 2 — Pipeline & execution
+## ✅ Phase 2 — Pipeline & execution
 
 The processing model: stages composed into a pipeline, with the concurrency
-story worked out.
+story worked out and a streaming executor.
 
 - [x] `Stage` trait — async `process(MediaBuffer) -> Vec<MediaBuffer>` (v0.1.0)
 - [x] `Pipeline` — ordered stage composition, pass-through, fan-out (v0.1.0)
@@ -69,8 +69,12 @@ story worked out.
       `BackpressureDecision`, with `Stage::load()`. Core reports saturation; the
       policy (in a higher layer) decides what it means. The mechanism, never the
       policy (v0.2.6).
-- [ ] 🔴 Producer/consumer between stages with bounded queues
-- [ ] 🔴 Multi-source pipelines (mux several inputs)
+- [x] **Streaming executor — `StreamPipeline`** — every stage runs as its own
+      task over **bounded** channels (producer/consumer), with real backpressure
+      driving the `BackpressurePolicy` and metrics fed live. True pipeline
+      parallelism vs. the sequential `process` (v0.3.0)
+- [x] **Multi-source** — `run_to_vec` muxes several input streams into the first
+      stage via concurrent producers (v0.3.0)
 
 ---
 

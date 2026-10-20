@@ -251,6 +251,45 @@ Timebase.AUDIO_48K.rescale(1_000_000_000, Timebase.MILLISECOND)
 // → 20833333 (entero preciso, sin error de redondeo)
 ```
 
+### 8. Pipeline por streaming — stages concurrentes, colas acotadas _(core Rust, nuevo en 0.3.0)_
+
+Cada stage corre como su propia task sobre una cola **acotada**, así los stages
+solapan trabajo entre núcleos. El backpressure maneja una política provista por
+el caller; las métricas por-stage se recolectan en vivo. Varias fuentes se
+muxean a la primera etapa.
+
+```rust
+use kc_core::{StreamPipeline, PassthroughStage};
+use kc_core::pipeline::{BackpressurePolicy, BackpressureDecision, LoadMetrics};
+
+// La política vive en la capa del caller — el core nunca interpreta los números.
+struct ShedWhenFull;
+impl BackpressurePolicy for ShedWhenFull {
+    fn decide(&mut self, m: &LoadMetrics) -> BackpressureDecision {
+        if m.queue_depth_ratio() > 0.8 {
+            BackpressureDecision::ShedLoad { severity: 1.0 }
+        } else {
+            BackpressureDecision::Proceed
+        }
+    }
+}
+
+let sp = StreamPipeline::builder()
+    .name("decode")
+    .capacity(64)                 // profundidad de cola acotada entre stages
+    .stage(PassthroughStage)
+    .policy(ShedWhenFull)
+    .build()?;
+
+// Dos fuentes, muxeadas y corridas concurrentemente por el pipeline.
+let out = sp.run_to_vec(vec![source_a, source_b]).await?;
+
+// Observabilidad en vivo (Fase 3):
+for (name, s) in sp.metrics().stages {
+    println!("{name}: {} in / {} out, {:.2}ms avg", s.frames_in, s.frames_out, s.mean_latency_ms());
+}
+```
+
 ---
 
 ## Conceptos centrales
@@ -540,7 +579,7 @@ el plan completo con la versión anotada por ítem.
 | Fase | Foco | Estado |
 |------|------|--------|
 | **1 — Fundación de buffers** | Buffers zero-copy + `BufferPool` (reciclado, pre-warm, RAII, benchmarks) | ✅ Completa |
-| **2 — Pipeline y ejecución** | Stages, threading con `WorkerPool`, hook genérico de backpressure | 🟡 Parcial |
+| **2 — Pipeline y ejecución** | Stages, `WorkerPool`, `StreamPipeline` (colas acotadas, backpressure, multi-fuente) | ✅ Completa |
 | **3 — Observabilidad** | Métricas por-stage, feed de backpressure, tracing spans | 🟡 Parcial |
 | **4 — Primitivas GPU** | `GpuBuffer` sobre Vulkan / Metal / D3D12 | 🔵 Diseñada |
 | **5 — Tiempo real y streaming** | Jitter buffer, estimación de bitrate, tipos RTP | 🔴 Planeada |
