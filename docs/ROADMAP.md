@@ -78,7 +78,7 @@ story worked out and a streaming executor.
 
 ---
 
-## 🟡 Phase 3 — Observability
+## ✅ Phase 3 — Observability
 
 See what the pipeline is doing, at low cost. Core counts; the caller interprets.
 
@@ -90,19 +90,27 @@ See what the pipeline is doing, at low cost. Core counts; the caller interprets.
       reads, closing the loop with the 0.2.6 hook (v0.2.7)
 - [x] **Tracing spans** — `trace-spans` feature wraps each stage execution in a
       `tracing` span via `.instrument()`; off by default, zero cost (v0.2.7)
-- [ ] 🔴 Optional `metrics`-crate exporter (Prometheus/StatsD sink)
-- [ ] 🔴 Drift/jitter tracking between stages over time
+- [x] **`MetricsSink` exporter hook** — `PipelineMetrics::export()` walks stages
+      into a caller-supplied sink (Prometheus/StatsD/logs). Core emits, never
+      depends on an exporter (v0.4.0)
+- [x] **Drift/jitter tracking** — per-stage latency min/max → `jitter_ms()`,
+      `min_latency_ms()`, `max_latency_ms()` on the snapshot (v0.4.0)
 
 ---
 
-## 🔵 Phase 4 — GPU primitives
+## 🟡 Phase 4 — GPU primitives
 
 Prepare for hardware acceleration. The largest jump in complexity, kept separate
-on purpose.
+on purpose. Core owns the *architecture* of GPU memory, not any one graphics API.
 
-- [ ] 🔵 `GpuBuffer` abstraction over Vulkan / Metal / D3D12 handles
-- [ ] 🔵 CPU-GPU transfer helpers, zero-copy where the platform allows
-- [ ] 🔵 Ownership, synchronization, and resource-lifetime model for GPU memory
+- [x] **`GpuBuffer` + `GpuBackend` trait** — backend-agnostic opaque device
+      buffer, RAII-freed; alloc/upload/download/free contract a real backend
+      implements. No graphics deps in core (v0.4.0)
+- [x] **`CpuFallbackBackend`** — host-memory implementation, so the abstraction
+      runs and is testable today without any GPU (v0.4.0)
+- [ ] 🔵 Real backends behind features: Vulkan / Metal / D3D12
+- [ ] 🔵 Zero-copy CPU↔GPU paths (mapped/shared memory) where the platform allows
+- [ ] 🔵 Synchronization + resource-lifetime model for cross-queue GPU work
 
 ---
 

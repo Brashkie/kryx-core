@@ -15,7 +15,7 @@ mod backpressure;
 pub use backpressure::{BackpressureDecision, BackpressurePolicy, LoadMetrics, NoBackpressure};
 
 mod metrics;
-pub use metrics::{PipelineMetrics, StageMetrics, StageMetricsSnapshot};
+pub use metrics::{MetricsSink, PipelineMetrics, StageMetrics, StageMetricsSnapshot};
 
 mod stream;
 pub use stream::{StreamPipeline, StreamPipelineBuilder};

@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.0] — 2026-10-20
+
+**Observability finished + GPU foundation laid.** Phase 3 reaches completion and
+Phase 4 opens with a backend-agnostic GPU buffer that runs today on a CPU
+fallback — no graphics dependencies pulled in.
+
+### Added — Phase 3 (Observability, complete)
+- **Latency spread / jitter** — `StageMetrics` now tracks per-frame latency min
+  and max (atomics). `StageMetricsSnapshot` gains `min_latency_ms()`,
+  `max_latency_ms()`, and `jitter_ms()` (max − min). Pure drops (latency 0) are
+  excluded so they don't collapse the minimum.
+- **`MetricsSink` trait** — a caller-supplied export destination. `PipelineMetrics::export(&mut sink)`
+  walks each stage into the sink and flushes; the sink decides the wire format
+  (Prometheus, StatsD, logs). Core emits, never depends on an exporter — the same
+  mechanism-not-policy boundary as backpressure.
+
+### Added — Phase 4 (GPU primitives, foundation)
+- **`GpuBuffer`** — an RAII handle to an opaque device buffer, freed on drop.
+  `alloc`, `from_slice`, `upload`, `download`, `len`, `handle`, `backend_name`.
+- **`GpuBackend` trait** — the alloc/upload/download/free contract a real backend
+  (Vulkan/Metal/D3D12) implements later. Core owns the *architecture* of GPU
+  memory, not any one API.
+- **`CpuFallbackBackend`** — implements `GpuBackend` with host memory, so code
+  written against `GpuBuffer` runs and is testable now with zero GPU present. A
+  real backend swaps in without changing call sites.
+- `GpuError` / `GpuResult` for the GPU surface.
+
+### Notes
+- Everything stays agnostic and zero-dependency: no `metrics` crate, no graphics
+  crates. The exporter and the GPU backend are both caller/feature concerns that
+  plug into core's traits. Phase 3 is complete; Phase 4 is under way.
+
 ## [0.3.0] — 2026-10-20
 
 **Streaming execution — Phase 2 complete.** The headline change: a pipeline that

@@ -24,7 +24,7 @@ use super::LoadMetrics;
 /// synchronization, so the cheapest atomic ordering is the right one. Take a
 /// [`StageMetricsSnapshot`] with [`snapshot`](Self::snapshot) for a consistent
 /// readout to report or compute on.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct StageMetrics {
     frames_in: AtomicU64,
     frames_out: AtomicU64,
@@ -33,6 +33,26 @@ pub struct StageMetrics {
     bytes_out: AtomicU64,
     /// Cumulative processing time across all frames, in nanoseconds.
     latency_ns_total: AtomicU64,
+    /// Smallest per-frame latency seen (ns). Starts at `u64::MAX` (unset).
+    latency_ns_min: AtomicU64,
+    /// Largest per-frame latency seen (ns).
+    latency_ns_max: AtomicU64,
+}
+
+impl Default for StageMetrics {
+    fn default() -> Self {
+        Self {
+            frames_in: AtomicU64::new(0),
+            frames_out: AtomicU64::new(0),
+            frames_dropped: AtomicU64::new(0),
+            bytes_in: AtomicU64::new(0),
+            bytes_out: AtomicU64::new(0),
+            latency_ns_total: AtomicU64::new(0),
+            // Min starts at MAX so the first `fetch_min` records the real value.
+            latency_ns_min: AtomicU64::new(u64::MAX),
+            latency_ns_max: AtomicU64::new(0),
+        }
+    }
 }
 
 impl StageMetrics {
@@ -60,10 +80,18 @@ impl StageMetrics {
         }
         self.latency_ns_total
             .fetch_add(latency_ns, Ordering::Relaxed);
+        // Track the latency spread for jitter. Only meaningful latencies (a
+        // processed frame) are recorded; a pure drop passes latency_ns = 0 which
+        // we skip so it doesn't collapse the min to zero.
+        if latency_ns > 0 {
+            self.latency_ns_min.fetch_min(latency_ns, Ordering::Relaxed);
+            self.latency_ns_max.fetch_max(latency_ns, Ordering::Relaxed);
+        }
     }
 
     /// Take a consistent-enough snapshot of the current counters.
     pub fn snapshot(&self) -> StageMetricsSnapshot {
+        let min_raw = self.latency_ns_min.load(Ordering::Relaxed);
         StageMetricsSnapshot {
             frames_in: self.frames_in.load(Ordering::Relaxed),
             frames_out: self.frames_out.load(Ordering::Relaxed),
@@ -71,10 +99,13 @@ impl StageMetrics {
             bytes_in: self.bytes_in.load(Ordering::Relaxed),
             bytes_out: self.bytes_out.load(Ordering::Relaxed),
             latency_ns_total: self.latency_ns_total.load(Ordering::Relaxed),
+            // Normalize the "unset" sentinel to 0 for consumers.
+            latency_ns_min: if min_raw == u64::MAX { 0 } else { min_raw },
+            latency_ns_max: self.latency_ns_max.load(Ordering::Relaxed),
         }
     }
 
-    /// Reset every counter to zero.
+    /// Reset every counter to zero (min back to its unset sentinel).
     pub fn reset(&self) {
         self.frames_in.store(0, Ordering::Relaxed);
         self.frames_out.store(0, Ordering::Relaxed);
@@ -82,6 +113,8 @@ impl StageMetrics {
         self.bytes_in.store(0, Ordering::Relaxed);
         self.bytes_out.store(0, Ordering::Relaxed);
         self.latency_ns_total.store(0, Ordering::Relaxed);
+        self.latency_ns_min.store(u64::MAX, Ordering::Relaxed);
+        self.latency_ns_max.store(0, Ordering::Relaxed);
     }
 
     /// Produce a generic [`LoadMetrics`] from the live counters, for a
@@ -116,9 +149,29 @@ pub struct StageMetricsSnapshot {
     pub bytes_in: u64,
     pub bytes_out: u64,
     pub latency_ns_total: u64,
+    /// Smallest per-frame latency seen (ns); 0 if nothing processed.
+    pub latency_ns_min: u64,
+    /// Largest per-frame latency seen (ns); 0 if nothing processed.
+    pub latency_ns_max: u64,
 }
 
 impl StageMetricsSnapshot {
+    /// Smallest per-frame latency in milliseconds.
+    pub fn min_latency_ms(&self) -> f64 {
+        self.latency_ns_min as f64 / 1.0e6
+    }
+
+    /// Largest per-frame latency in milliseconds.
+    pub fn max_latency_ms(&self) -> f64 {
+        self.latency_ns_max as f64 / 1.0e6
+    }
+
+    /// Latency spread (max − min) in milliseconds — a simple jitter measure.
+    /// A steady stage has near-zero jitter; a bursty one spreads wide.
+    pub fn jitter_ms(&self) -> f64 {
+        self.max_latency_ms() - self.min_latency_ms()
+    }
+
     /// Mean per-frame processing latency in milliseconds, over frames that
     /// entered the stage. Returns 0.0 when nothing has been processed.
     pub fn mean_latency_ms(&self) -> f64 {
@@ -158,6 +211,33 @@ impl PipelineMetrics {
     pub fn total_dropped(&self) -> u64 {
         self.stages.iter().map(|(_, s)| s.frames_dropped).sum()
     }
+
+    /// Export every stage's snapshot to a caller-supplied [`MetricsSink`].
+    ///
+    /// Core walks the stages and hands each one to the sink, then flushes. The
+    /// sink decides the wire format and destination (Prometheus, StatsD, logs) —
+    /// core never depends on any of them. Same boundary as backpressure: the
+    /// mechanism lives here, the exporter in the caller's layer.
+    pub fn export(&self, sink: &mut impl MetricsSink) {
+        for (name, snap) in &self.stages {
+            sink.record(name, snap);
+        }
+        sink.flush();
+    }
+}
+
+/// A caller-supplied destination for exporting pipeline metrics.
+///
+/// Implement this to ship metrics anywhere — a Prometheus registry, a StatsD
+/// socket, a log line, a test buffer. Core produces the snapshots and calls
+/// [`record`](Self::record) once per stage, then [`flush`](Self::flush) once;
+/// it never pulls in an exporter dependency of its own.
+pub trait MetricsSink {
+    /// Receive one stage's name and current snapshot.
+    fn record(&mut self, stage: &str, snapshot: &StageMetricsSnapshot);
+
+    /// Called once after all stages in an export pass. Default: no-op.
+    fn flush(&mut self) {}
 }
 
 #[cfg(test)]
@@ -215,5 +295,72 @@ mod tests {
         m.record_out(1, 10, 100);
         m.reset();
         assert_eq!(m.snapshot(), StageMetricsSnapshot::default());
+    }
+
+    #[test]
+    fn tracks_latency_min_max_and_jitter() {
+        let m = StageMetrics::new();
+        m.record_in(10);
+        m.record_out(1, 10, 2_000_000); // 2 ms
+        m.record_in(10);
+        m.record_out(1, 10, 5_000_000); // 5 ms
+        m.record_in(10);
+        m.record_out(1, 10, 1_000_000); // 1 ms
+        let s = m.snapshot();
+        assert_eq!(s.min_latency_ms(), 1.0);
+        assert_eq!(s.max_latency_ms(), 5.0);
+        assert_eq!(s.jitter_ms(), 4.0); // 5 - 1
+    }
+
+    #[test]
+    fn drops_do_not_collapse_min_latency() {
+        let m = StageMetrics::new();
+        m.record_in(10);
+        m.record_out(1, 10, 3_000_000); // 3 ms processed
+        m.record_in(10);
+        m.record_out(0, 0, 0); // dropped — latency 0, must not set min to 0
+        let s = m.snapshot();
+        assert_eq!(s.min_latency_ms(), 3.0);
+    }
+
+    #[test]
+    fn exports_to_a_sink() {
+        // A sink that just collects what core hands it.
+        #[derive(Default)]
+        struct Collector {
+            rows: Vec<(String, u64)>,
+            flushed: bool,
+        }
+        impl MetricsSink for Collector {
+            fn record(&mut self, stage: &str, s: &StageMetricsSnapshot) {
+                self.rows.push((stage.to_string(), s.frames_in));
+            }
+            fn flush(&mut self) {
+                self.flushed = true;
+            }
+        }
+
+        let pm = PipelineMetrics {
+            stages: vec![
+                (
+                    "decode",
+                    StageMetricsSnapshot {
+                        frames_in: 10,
+                        ..Default::default()
+                    },
+                ),
+                (
+                    "scale",
+                    StageMetricsSnapshot {
+                        frames_in: 9,
+                        ..Default::default()
+                    },
+                ),
+            ],
+        };
+        let mut sink = Collector::default();
+        pm.export(&mut sink);
+        assert_eq!(sink.rows, vec![("decode".into(), 10), ("scale".into(), 9)]);
+        assert!(sink.flushed);
     }
 }

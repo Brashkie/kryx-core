@@ -13,12 +13,12 @@ pub mod types;
 pub mod utils;
 
 pub use buffer::{
-    acquire_guard, shared_pool, BufferPool, MediaBuffer, PoolGuard, PoolStats, SharedPool,
-    WorkerPool,
+    acquire_guard, shared_pool, BufferPool, CpuFallbackBackend, GpuBackend, GpuBuffer, GpuError,
+    MediaBuffer, PoolGuard, PoolStats, SharedPool, WorkerPool,
 };
 pub use error::{MediaError, Result};
 pub use pipeline::{
-    BackpressureDecision, BackpressurePolicy, LoadMetrics, NoBackpressure, Pipeline,
+    BackpressureDecision, BackpressurePolicy, LoadMetrics, MetricsSink, NoBackpressure, Pipeline,
     PipelineMetrics, StageMetrics, StageMetricsSnapshot, StreamPipeline, StreamPipelineBuilder,
 };
 pub use types::{MediaType, Timestamp};
