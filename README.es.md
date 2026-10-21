@@ -582,7 +582,7 @@ el plan completo con la versión anotada por ítem.
 | **2 — Pipeline y ejecución** | Stages, `WorkerPool`, `StreamPipeline` (colas acotadas, backpressure, multi-fuente) | ✅ Completa |
 | **3 — Observabilidad** | Métricas, jitter, exporter `MetricsSink`, tracing spans | ✅ Completa |
 | **4 — Primitivas GPU** | `GpuBuffer` + trait `GpuBackend` + CPU fallback (backends reales próximo) | 🟡 Parcial |
-| **5 — Tiempo real y streaming** | Jitter buffer, estimación de bitrate, tipos RTP | 🔴 Planeada |
+| **5 — Tiempo real y streaming** | `JitterBuffer`, `BitrateEstimator`, `RealtimePolicy` (tipos RTP próximo) | 🟡 Parcial |
 | **6 — Estabilidad** | Freeze de API, 1.0, sistema de plugins | 🔴 Planeada |
 
 ---

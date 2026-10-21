@@ -8,6 +8,7 @@ pub mod error;
 pub mod ffi;
 pub mod io;
 pub mod pipeline;
+pub mod realtime;
 pub mod sync;
 pub mod types;
 pub mod utils;
@@ -21,6 +22,7 @@ pub use pipeline::{
     BackpressureDecision, BackpressurePolicy, LoadMetrics, MetricsSink, NoBackpressure, Pipeline,
     PipelineMetrics, StageMetrics, StageMetricsSnapshot, StreamPipeline, StreamPipelineBuilder,
 };
+pub use realtime::{BitrateEstimator, JitterBuffer, JitterPush, RealtimePolicy};
 pub use types::{MediaType, Timestamp};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

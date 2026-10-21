@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.0] — 2026-10-21
+
+**Real-time primitives — Phase 5 under way.** Low-latency building blocks, all
+generic, clock-agnostic, and testable without sleeping.
+
+### Added
+- **`JitterBuffer`** — a presentation-timestamp reorder buffer. Frames arriving
+  out of order are held in a min-heap by `pts` and released in order once the
+  buffer primes to a target depth, then continuously. A frame whose `pts` is at
+  or before the last released one is dropped as too late (`dropped_late()`); a
+  full buffer reports `JitterPush::Full`.
+- **`BitrateEstimator`** — sliding-window bits/second. The caller supplies the
+  clock (seconds) per sample, so it's deterministic; samples older than the
+  window are evicted. Reports `bits_per_sec()` and `bytes_in_window()`.
+- **`RealtimePolicy`** — a `BackpressurePolicy` that sheds when a per-frame
+  latency budget is blown or the queue nears full. Concrete *timing* logic (no
+  codec specifics), so it ships in core; perceptual/R-D dropping still belongs in
+  a codec layer reading the generic metrics.
+
+### Performance / cleanup
+- `JitterBuffer` pre-sizes its heap to `capacity`, so it never reallocates during
+  steady operation; hot accessors are `#[inline]`.
+- Priming semantics fixed: once a jitter buffer reaches target depth it releases
+  continuously instead of re-buffering to target on every pop.
+
+### Notes
+- RTP / WebRTC-friendly types are deferred (network-interop concerns) to keep
+  core transport-agnostic. The primitives here carry no codec or transport
+  knowledge — same boundary as the rest of the pipeline.
+
 ## [0.4.0] — 2026-10-20
 
 **Observability finished + GPU foundation laid.** Phase 3 reaches completion and

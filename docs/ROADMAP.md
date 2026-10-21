@@ -114,14 +114,18 @@ on purpose. Core owns the *architecture* of GPU memory, not any one graphics API
 
 ---
 
-## 🔴 Phase 5 — Real-time & streaming
+## 🟡 Phase 5 — Real-time & streaming
 
-Low-latency and network-aware operation.
+Low-latency and network-aware operation. Generic timing primitives; transport
+specifics stay out of core.
 
-- [ ] 🔴 `RealtimePipeline` variant with bounded queues + frame-drop policy
-- [ ] 🔴 Jitter buffer primitive
-- [ ] 🔴 Bitrate estimator and adaptive throttle hooks
-- [ ] 🔴 RTP / WebRTC-friendly types
+- [x] **`JitterBuffer`** — pts reorder buffer with target-depth priming and
+      too-late drop (v0.5.0)
+- [x] **`BitrateEstimator`** — deterministic sliding-window bits/sec (v0.5.0)
+- [x] **`RealtimePolicy`** — `BackpressurePolicy` that sheds on a latency deadline
+      or near-full queue; the frame-drop policy for real-time operation (v0.5.0)
+- [ ] 🔴 RTP / WebRTC-friendly types (sequence/marker/timestamp)
+- [ ] 🔴 Adaptive throttle driven by the bitrate estimate over time
 
 ---
 
