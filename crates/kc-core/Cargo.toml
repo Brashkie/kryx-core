@@ -33,12 +33,21 @@ tracing = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 
+# Real GPU backend (optional, behind the `gpu-wgpu` feature).
+# Pinned to a known API; bump on your machine if your wgpu is newer.
+wgpu = { version = "0.20", optional = true }
+pollster = { version = "0.3", optional = true }
+
 [features]
 default = []
 serde = ["dep:serde", "dep:serde_json"]
 # Emit a `tracing` span around every stage execution (Phase 3 observability).
 # Off by default: zero cost when not enabled; turn on for debugging/profiling.
 trace-spans = []
+# Real GPU backend over wgpu (Vulkan/Metal/D3D12). Off by default: the crate
+# builds and tests on the CPU fallback without it. Enable on a machine with a
+# GPU: `cargo build --features gpu-wgpu`.
+gpu-wgpu = ["dep:wgpu", "dep:pollster"]
 # Link against real Zig modules. Without this feature, internal stubs are used,
 # so the crate is always usable for development and testing.
 link-zig = []

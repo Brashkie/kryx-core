@@ -581,7 +581,7 @@ el plan completo con la versión anotada por ítem.
 | **1 — Fundación de buffers** | Buffers zero-copy + `BufferPool` (reciclado, pre-warm, RAII, benchmarks) | ✅ Completa |
 | **2 — Pipeline y ejecución** | Stages, `WorkerPool`, `StreamPipeline` (colas acotadas, backpressure, multi-fuente) | ✅ Completa |
 | **3 — Observabilidad** | Métricas, jitter, exporter `MetricsSink`, tracing spans | ✅ Completa |
-| **4 — Primitivas GPU** | `GpuBuffer` + trait `GpuBackend` + CPU fallback (backends reales próximo) | 🟡 Parcial |
+| **4 — Primitivas GPU** | `GpuBuffer` + `GpuBackend` + CPU fallback + `WgpuBackend` (feature `gpu-wgpu`) | 🟡 Parcial |
 | **5 — Tiempo real y streaming** | `JitterBuffer`, `BitrateEstimator`, `RealtimePolicy` (tipos RTP próximo) | 🟡 Parcial |
 | **6 — Estabilidad** | Freeze de API, 1.0, sistema de plugins | 🔴 Planeada |
 

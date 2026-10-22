@@ -108,9 +108,12 @@ on purpose. Core owns the *architecture* of GPU memory, not any one graphics API
       implements. No graphics deps in core (v0.4.0)
 - [x] **`CpuFallbackBackend`** — host-memory implementation, so the abstraction
       runs and is testable today without any GPU (v0.4.0)
-- [ ] 🔵 Real backends behind features: Vulkan / Metal / D3D12
+- [x] **`WgpuBackend` + `best_backend()`** — a real backend over wgpu
+      (Vulkan/Metal/D3D12/WebGPU) behind the `gpu-wgpu` feature, with automatic
+      fallback to CPU when no adapter. Call sites unchanged (v0.6.0)
 - [ ] 🔵 Zero-copy CPU↔GPU paths (mapped/shared memory) where the platform allows
 - [ ] 🔵 Synchronization + resource-lifetime model for cross-queue GPU work
+- [ ] 🔵 GPU-resident pipeline stages (process without round-tripping to host)
 
 ---
 

@@ -95,4 +95,4 @@ export * from './error'
 // ─── Package version ────────────────────────────────────────────────────────
 
 /** npm package version of `@kryxjs/core`. */
-export const VERSION = '0.5.0'
+export const VERSION = '0.6.0'

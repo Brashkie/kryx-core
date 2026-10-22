@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] — 2026-10-21
+
+**Real GPU backend behind a feature — Phase 4 deepens.** The `GpuBuffer`
+abstraction from 0.4.0 now has a real backend over `wgpu` (Vulkan / Metal /
+D3D12 / WebGPU), opt-in and never required. The CPU fallback stays the default,
+so the crate builds and tests with no GPU.
+
+### Added
+- **`WgpuBackend`** (feature `gpu-wgpu`) — implements `GpuBackend` over `wgpu`:
+  device buffers, `write_buffer` uploads, staging-buffer readback that blocks on
+  `device.poll(Wait)`. The synchronous trait bridges wgpu's async via `pollster`.
+- **`best_backend()`** — returns the best available backend as a trait object:
+  tries `WgpuBackend` when the feature is on (falls back to CPU if no adapter),
+  otherwise the CPU backend. **Call sites never change** — only the backend
+  behind the handle does. This is the whole point of the 0.4.0 abstraction paying
+  off: a real GPU swaps in without touching any code that uses `GpuBuffer`.
+
+### Notes
+- `gpu-wgpu` is **off by default**: zero new dependencies and zero cost unless
+  enabled. Build it on a GPU machine with `cargo build --features gpu-wgpu`.
+- The wgpu code is written against **wgpu 0.20 + pollster 0.3**; wgpu's API moves
+  between releases, so a newer wgpu may need a small tweak at device creation and
+  buffer mapping (noted in the module). The `GpuBackend` contract is stable.
+- Multi-language direction: `wgpu` is a Rust crate that drives Vulkan/Metal/D3D12.
+  It's the first real GPU backend — the path to codec reuse (C/C++ libs via FFI)
+  and Zig-as-build-tool follows the same opt-in, measured pattern.
+
 ## [0.5.0] — 2026-10-21
 
 **Real-time primitives — Phase 5 under way.** Low-latency building blocks, all

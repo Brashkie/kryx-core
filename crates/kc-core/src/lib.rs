@@ -13,9 +13,11 @@ pub mod sync;
 pub mod types;
 pub mod utils;
 
+#[cfg(feature = "gpu-wgpu")]
+pub use buffer::WgpuBackend;
 pub use buffer::{
-    acquire_guard, shared_pool, BufferPool, CpuFallbackBackend, GpuBackend, GpuBuffer, GpuError,
-    MediaBuffer, PoolGuard, PoolStats, SharedPool, WorkerPool,
+    acquire_guard, best_backend, shared_pool, BufferPool, CpuFallbackBackend, GpuBackend,
+    GpuBuffer, GpuError, MediaBuffer, PoolGuard, PoolStats, SharedPool, WorkerPool,
 };
 pub use error::{MediaError, Result};
 pub use pipeline::{

@@ -17,7 +17,9 @@ mod worker_pool;
 pub use worker_pool::WorkerPool;
 
 mod gpu;
-pub use gpu::{CpuFallbackBackend, GpuBackend, GpuBuffer, GpuError, GpuResult};
+#[cfg(feature = "gpu-wgpu")]
+pub use gpu::WgpuBackend;
+pub use gpu::{best_backend, CpuFallbackBackend, GpuBackend, GpuBuffer, GpuError, GpuResult};
 
 pub const MAX_BUFFER_SIZE: usize = 256 * 1024 * 1024; // 256 MiB
 

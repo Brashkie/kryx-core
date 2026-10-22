@@ -238,6 +238,201 @@ impl GpuBackend for CpuFallbackBackend {
     }
 }
 
+// ─── Backend selection ───────────────────────────────────────────────────────
+
+/// Return the best available GPU backend as a trait object.
+///
+/// With the `gpu-wgpu` feature enabled this tries a real wgpu backend first
+/// (Vulkan / Metal / D3D12 under the hood) and falls back to the CPU backend if
+/// no adapter is available. Without the feature it always returns the CPU
+/// fallback. Call sites never change — only the backend behind the handle does.
+pub fn best_backend() -> Arc<dyn GpuBackend> {
+    #[cfg(feature = "gpu-wgpu")]
+    {
+        if let Ok(b) = wgpu_backend::WgpuBackend::new() {
+            return Arc::new(b);
+        }
+    }
+    Arc::new(CpuFallbackBackend::new())
+}
+
+// ─── Real GPU backend (wgpu), feature-gated ──────────────────────────────────
+
+#[cfg(feature = "gpu-wgpu")]
+mod wgpu_backend {
+    //! A real [`GpuBackend`](super::GpuBackend) over `wgpu` (Vulkan / Metal /
+    //! D3D12 / WebGPU). Enabled only with the `gpu-wgpu` feature; the crate
+    //! builds and tests without it, on the CPU fallback.
+    //!
+    //! ## Version note
+    //!
+    //! Written & verified to compile against **wgpu 0.20.1** + **pollster 0.3**.
+    //! wgpu's API shifts between releases; on a newer wgpu these spots most
+    //! likely need a small tweak: `DeviceDescriptor` gains a `memory_hints` field
+    //! in wgpu 22.x (add `memory_hints: Default::default(),`), `request_adapter`/
+    //! `request_device` return types, and `Maintain::Wait` (later `PollType`).
+    //! The `GpuBackend` contract and everything above this module stay the same.
+    //!
+    //! The trait is synchronous; wgpu is async. Device creation blocks via
+    //! `pollster`, and buffer readback blocks on `device.poll(Maintain::Wait)`.
+
+    use std::collections::HashMap;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    use parking_lot::Mutex;
+
+    use super::{GpuBackend, GpuError, GpuResult};
+
+    /// Round `n` up to the nearest multiple of 4 (wgpu copy alignment).
+    #[inline]
+    fn align4(n: usize) -> usize {
+        (n + 3) & !3
+    }
+
+    struct Entry {
+        buffer: wgpu::Buffer,
+        /// Logical size requested by the caller (buffer may be padded to align).
+        logical: usize,
+    }
+
+    /// GPU-backed buffers via wgpu.
+    pub struct WgpuBackend {
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+        state: Mutex<HashMap<u64, Entry>>,
+        next_id: AtomicU64,
+    }
+
+    impl std::fmt::Debug for WgpuBackend {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("WgpuBackend").finish()
+        }
+    }
+
+    impl WgpuBackend {
+        /// Request an adapter and device, blocking until ready. Fails if no GPU
+        /// adapter is available (e.g. headless CI without a software adapter).
+        pub fn new() -> GpuResult<Self> {
+            let instance = wgpu::Instance::default();
+            let adapter = pollster::block_on(
+                instance.request_adapter(&wgpu::RequestAdapterOptions::default()),
+            )
+            .ok_or_else(|| GpuError::Backend("no GPU adapter available".into()))?;
+            let (device, queue) = pollster::block_on(adapter.request_device(
+                &wgpu::DeviceDescriptor {
+                    label: Some("kryx-wgpu-device"),
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::default(),
+                    // NOTE: wgpu 0.20 has no `memory_hints` field; it was added in
+                    // wgpu 22.x. On a newer wgpu add: `memory_hints: Default::default(),`.
+                },
+                None,
+            ))
+            .map_err(|e| GpuError::Backend(e.to_string()))?;
+            Ok(Self {
+                device,
+                queue,
+                state: Mutex::new(HashMap::new()),
+                next_id: AtomicU64::new(0),
+            })
+        }
+    }
+
+    impl GpuBackend for WgpuBackend {
+        fn name(&self) -> &'static str {
+            "wgpu"
+        }
+
+        fn alloc(&self, size: usize) -> GpuResult<u64> {
+            let padded = align4(size).max(4);
+            let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("kryx-gpu-buffer"),
+                size: padded as u64,
+                usage: wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_SRC
+                    | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let id = self.next_id.fetch_add(1, Ordering::Relaxed) + 1;
+            self.state.lock().insert(
+                id,
+                Entry {
+                    buffer,
+                    logical: size,
+                },
+            );
+            Ok(id)
+        }
+
+        fn upload(&self, id: u64, data: &[u8]) -> GpuResult<()> {
+            let st = self.state.lock();
+            let entry = st.get(&id).ok_or(GpuError::InvalidHandle(id))?;
+            if data.len() != entry.logical {
+                return Err(GpuError::SizeMismatch {
+                    buffer: entry.logical,
+                    data: data.len(),
+                });
+            }
+            // write_buffer is applied at the next submit; flush immediately.
+            self.queue.write_buffer(&entry.buffer, 0, data);
+            self.queue.submit(std::iter::empty::<wgpu::CommandBuffer>());
+            Ok(())
+        }
+
+        fn download(&self, id: u64) -> GpuResult<Vec<u8>> {
+            let st = self.state.lock();
+            let entry = st.get(&id).ok_or(GpuError::InvalidHandle(id))?;
+            let padded = align4(entry.logical).max(4);
+
+            // Staging buffer we can map for reading.
+            let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("kryx-gpu-staging"),
+                size: padded as u64,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let mut enc = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            enc.copy_buffer_to_buffer(&entry.buffer, 0, &staging, 0, padded as u64);
+            self.queue.submit(Some(enc.finish()));
+
+            // Map and block until the GPU is done.
+            let slice = staging.slice(..);
+            let (tx, rx) = std::sync::mpsc::channel();
+            slice.map_async(wgpu::MapMode::Read, move |res| {
+                let _ = tx.send(res);
+            });
+            let _ = self.device.poll(wgpu::Maintain::Wait);
+            rx.recv()
+                .map_err(|_| GpuError::Backend("map channel closed".into()))?
+                .map_err(|e| GpuError::Backend(format!("buffer map failed: {e:?}")))?;
+
+            let mapped = slice.get_mapped_range();
+            let mut out = mapped[..entry.logical].to_vec();
+            out.truncate(entry.logical);
+            drop(mapped);
+            staging.unmap();
+            Ok(out)
+        }
+
+        fn free(&self, id: u64) -> GpuResult<()> {
+            self.state
+                .lock()
+                .remove(&id)
+                .ok_or(GpuError::InvalidHandle(id))?;
+            Ok(())
+        }
+
+        fn allocated_bytes(&self) -> usize {
+            self.state.lock().values().map(|e| e.logical).sum()
+        }
+    }
+}
+
+#[cfg(feature = "gpu-wgpu")]
+pub use wgpu_backend::WgpuBackend;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -291,5 +486,14 @@ mod tests {
         assert_eq!(a.download().unwrap(), vec![1, 2]);
         assert_eq!(b.download().unwrap(), vec![3, 4, 5]);
         assert_eq!(backend.allocated_bytes(), 5);
+    }
+
+    #[test]
+    fn best_backend_works_through_the_trait() {
+        // Without the gpu-wgpu feature this is the CPU fallback; with it, it's
+        // wgpu (or the CPU fallback if no adapter). Call sites don't change.
+        let backend = best_backend();
+        let gpu = GpuBuffer::from_slice(backend, &[7, 7, 7, 7]).unwrap();
+        assert_eq!(gpu.download().unwrap(), vec![7, 7, 7, 7]);
     }
 }
