@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.0] — 2026-10-28
+
+**Stage plugin registry — Phase 6 under way.** The same extensible pattern the
+codec registry uses, now for pipeline stages: assemble a pipeline from named,
+third-party stages described by configuration instead of hard-coded types.
+
+### Added
+- **`StageRegistry`** — maps a stage name to a factory. `register(name, factory)`,
+  `build(name, &config)`, `contains`, `names`, `len`. Cloning is cheap (factories
+  behind `Arc`), so a configured registry is shareable across threads.
+- **`StageRegistry::build_pipeline(&[(name, config)])`** — assembles a whole
+  `Pipeline` from an ordered list of names + configs. This is what lets a pipeline
+  be described by a file or request rather than hard-coded.
+- **`StageConfig` + `ConfigValue`** — a generic parameter bag (`Str`/`Int`/`Float`/
+  `Bool`) handed to a factory, with typed accessors (`str`/`int`/`float`/`bool`;
+  `int` promotes to `float`). Core carries config without interpreting it — the
+  stage decides what the values mean.
+- `PipelineError::UnknownStage { name }` for a build against an unregistered name.
+
+### Design
+- Core never knows what a registered stage does — only how to map a name to a
+  factory and pass a generic config. Third parties extend the pipeline without
+  touching core, the same mechanism-not-policy boundary as the rest of the crate.
+
 ## [0.6.0] — 2026-10-21
 
 **Real GPU backend behind a feature — Phase 4 deepens.** The `GpuBuffer`

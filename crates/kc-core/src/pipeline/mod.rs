@@ -20,6 +20,9 @@ pub use metrics::{MetricsSink, PipelineMetrics, StageMetrics, StageMetricsSnapsh
 mod stream;
 pub use stream::{StreamPipeline, StreamPipelineBuilder};
 
+mod registry;
+pub use registry::{ConfigValue, StageConfig, StageRegistry};
+
 // ─── StageContext ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]

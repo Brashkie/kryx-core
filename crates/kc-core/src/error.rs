@@ -65,6 +65,9 @@ pub enum PipelineError {
     #[error("pipeline has no stages")]
     Empty,
 
+    #[error("no stage registered under the name {name:?}")]
+    UnknownStage { name: String },
+
     #[error("channel closed at stage {stage}")]
     ChannelClosed { stage: String },
 

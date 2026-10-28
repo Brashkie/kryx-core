@@ -582,7 +582,7 @@ full plan with per-item version annotations.
 | **3 — Observability** | Metrics, jitter, `MetricsSink` exporter, tracing spans | ✅ Complete |
 | **4 — GPU primitives** | `GpuBuffer` + `GpuBackend` + CPU fallback + `WgpuBackend` (feature `gpu-wgpu`) | 🟡 Partial |
 | **5 — Real-time & streaming** | `JitterBuffer`, `BitrateEstimator`, `RealtimePolicy` (RTP types next) | 🟡 Partial |
-| **6 — Stability** | API freeze, 1.0, plugin system | 🔴 Planned |
+| **6 — Stability** | `StageRegistry` plugin system (API freeze + 1.0 next) | 🟡 Partial |
 
 ---
 

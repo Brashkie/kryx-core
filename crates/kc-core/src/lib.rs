@@ -21,8 +21,9 @@ pub use buffer::{
 };
 pub use error::{MediaError, Result};
 pub use pipeline::{
-    BackpressureDecision, BackpressurePolicy, LoadMetrics, MetricsSink, NoBackpressure, Pipeline,
-    PipelineMetrics, StageMetrics, StageMetricsSnapshot, StreamPipeline, StreamPipelineBuilder,
+    BackpressureDecision, BackpressurePolicy, ConfigValue, LoadMetrics, MetricsSink,
+    NoBackpressure, Pipeline, PipelineMetrics, StageConfig, StageMetrics, StageMetricsSnapshot,
+    StageRegistry, StreamPipeline, StreamPipelineBuilder,
 };
 pub use realtime::{BitrateEstimator, JitterBuffer, JitterPush, RealtimePolicy};
 pub use types::{MediaType, Timestamp};

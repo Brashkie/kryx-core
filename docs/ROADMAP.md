@@ -132,10 +132,12 @@ specifics stay out of core.
 
 ---
 
-## 🔴 Phase 6 — Stability
+## 🟡 Phase 6 — Stability
 
+- [x] **Stage plugin registry** — `StageRegistry` maps names to factories;
+      `build_pipeline` assembles a pipeline from config (names + params). Third
+      parties extend the pipeline without touching core (v0.7.0)
 - [ ] 🔴 API freeze and 1.0 — stable surface all Kryx packages build on
-- [ ] 🔴 Plugin system for third-party stages
 - [ ] 🔴 Full semver guarantees
 
 ---
