@@ -161,6 +161,10 @@ jobs:
           toolchain: stable
           targets: ${{ matrix.settings.target }}
 
+      - name: Add target to the pinned toolchain
+        if: ${{ !matrix.settings.docker }}
+        run: rustup target add ${{ matrix.settings.target }}
+
       - name: Cache cargo
         uses: actions/cache@v4
         with:
