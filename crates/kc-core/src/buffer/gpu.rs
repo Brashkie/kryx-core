@@ -33,6 +33,7 @@ use parking_lot::Mutex;
 
 /// Errors from GPU buffer operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum GpuError {
     /// The handle doesn't refer to a live device buffer.
     InvalidHandle(u64),

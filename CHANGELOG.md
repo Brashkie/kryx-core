@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.0] — 2026-11-19
+
+**Stable release — API freeze.** `kc-core` now follows Semantic Versioning; the
+public surface re-exported from the crate root is covered by the `1.x`
+compatibility guarantee. See `STABILITY.md`.
+
+The API was validated against a real consumer (`@kryxjs/dsp`, which exercises
+`Stage` / `Pipeline` / `StageRegistry` end to end) before freezing.
+
+### Changed
+- Public enums that will grow across `1.x` are now `#[non_exhaustive]`:
+  `GpuError`, `FrameMeta`, `ClockSource`, `ZigResult` (joining the error and
+  type enums already marked). Match them with a `_ => …` arm.
+- `StageMetrics::record_in` / `record_out` are now `pub(crate)` — they are
+  pipeline-internal recorders, never part of the public API. Reading metrics is
+  unchanged (`snapshot`, `PipelineMetrics`, `MetricsSink`).
+
+### Stability
+- Added `STABILITY.md` (what `1.x` guarantees, the `#[non_exhaustive]` list,
+  MSRV `1.80`, deprecation policy).
+
+### Notes
+- Enums kept deliberately exhaustive: `ConfigValue`, `JitterPush`,
+  `BackpressureDecision`, `SeekMode` — you can match them without a wildcard.
+- No functional/behavioural changes; this release is about the stability
+  contract.
+
+---
+
 ## [0.7.0] — 2026-10-28
 
 **Stage plugin registry — Phase 6 under way.** The same extensible pattern the

@@ -28,6 +28,7 @@ use crate::error::{MediaError, Result};
 /// Return code from Zig functions. Mirrors `media_result_t` in Zig.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ZigResult {
     /// Success.
     Ok = 0,

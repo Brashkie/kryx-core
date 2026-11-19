@@ -153,6 +153,7 @@ pub struct AudioMeta {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum FrameMeta {
     Video(VideoMeta),
     Audio(AudioMeta),

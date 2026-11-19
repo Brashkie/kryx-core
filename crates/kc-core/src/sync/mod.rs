@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 pub const MAX_DRIFT_MS: i64 = 40;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ClockSource {
     Audio,
     Video,

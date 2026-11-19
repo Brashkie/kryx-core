@@ -63,7 +63,7 @@ impl StageMetrics {
 
     /// Record one frame entering the stage, carrying `bytes`.
     #[inline]
-    pub fn record_in(&self, bytes: u64) {
+    pub(crate) fn record_in(&self, bytes: u64) {
         self.frames_in.fetch_add(1, Ordering::Relaxed);
         self.bytes_in.fetch_add(bytes, Ordering::Relaxed);
     }
@@ -71,7 +71,7 @@ impl StageMetrics {
     /// Record `count` frames leaving the stage, carrying `bytes` in total, after
     /// `latency_ns` of processing. When `count` is 0 the frame was dropped.
     #[inline]
-    pub fn record_out(&self, count: u64, bytes: u64, latency_ns: u64) {
+    pub(crate) fn record_out(&self, count: u64, bytes: u64, latency_ns: u64) {
         if count == 0 {
             self.frames_dropped.fetch_add(1, Ordering::Relaxed);
         } else {
